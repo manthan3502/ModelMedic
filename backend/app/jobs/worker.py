@@ -9,6 +9,8 @@ from backend.app.db.models import Job
 from backend.app.db.session import check_schema, create_db
 from backend.app.domain.jobs import OwnershipLost
 from backend.app.jobs.datasets import validation_result
+from backend.app.jobs.monitoring import analysis_result
+from backend.app.jobs.monitoring import validation_result as current_validation
 from backend.app.jobs.training import training_result
 from backend.app.services.queue import Queue
 from backend.app.storage.base import ArtifactStore
@@ -55,9 +57,14 @@ def run_once(
     try:
         queue.heartbeat(worker_id, job)
         if job.job_type == "DATASET_VALIDATE" and store and settings:
-            result, canonical_key = validation_result(queue, job, store, settings)
+            if job.target_type == "RUN":
+                result, canonical_key = current_validation(queue, job, store, settings)
+            else:
+                result, canonical_key = validation_result(queue, job, store, settings)
         elif job.job_type == "BASELINE_TRAIN" and store and settings:
             result, training_prefix, failed = training_result(queue, job, store, settings)
+        elif job.job_type == "MONITORING_ANALYZE" and store and settings:
+            result, training_prefix, failed = analysis_result(queue, job, store, settings)
         else:
             execute_dummy(job)
     except Exception:

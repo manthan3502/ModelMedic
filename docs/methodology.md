@@ -118,3 +118,86 @@ baseline mutation routes share the lifecycle guard and reject established projec
 Configured input caps remain computational guardrails, not deployment capacity
 promises. This milestone does not claim production throughput or worst-case
 memory/latency; deployment sizing remains subject to the locked compute-budget gate.
+
+
+## M3 monitoring: reference and input boundaries
+
+Methodology `monitoring-v1` uses the established snapshot's ordered feature list,
+semantic types and probability classes. Current CSVs share the baseline's empty /
+whitespace-only missing policy. Literal missing-like tokens remain observed values;
+invalid frozen numeric values block validation. Categories are never trimmed or
+re-inferred. A target column must be absent for Mode A. Partial labels and unknown
+classes block validation; complete valid labels identify Mode B, whose analysis is
+not implemented in M3. At least 50 current rows are required.
+
+The worker verifies canonical SHA-256/schema, model manifest/hash/version and the
+exact snapshot configuration fingerprint before frozen inference. It calls only
+predict/predict_proba; it never fits preprocessing or a classifier. All valid raw
+baseline rows define feature distribution/missingness references. The persisted,
+hash-verified M2 held-out predictions/confidence define model-behavior references;
+baseline behavior is never inferred again during monitoring.
+
+## M3 statistical parameters
+
+Pinned SciPy 1.16.2 calls are explicit:
+
+- `ks_2samp(..., method="auto")`
+- `chi2_contingency(..., correction=False)`
+- `fisher_exact(..., alternative="two-sided")`
+- `false_discovery_control(..., method="bh")`
+- `jensenshannon(..., base=2)` (distance, not divergence)
+- `wasserstein_distance(...)` (Wasserstein-1 in the original feature units)
+
+Numeric tests use raw observed non-missing numbers before median imputation or
+scaling. Numeric/categorical distribution tests require 30 observed values in each
+sample. Tied/discrete numeric inputs carry the continuous-KS-assumption caution.
+Range-outside share uses the full baseline observed [min,max] and is descriptive.
+Wasserstein magnitudes are never ranked across unrelated features.
+
+Categorical tests use raw observed non-missing counts before missing-category
+insertion/OHE. With n_base and n_current, t = 5*(n_base+n_current)/min(n_base,n_current).
+Categories whose combined counts are below t enter a test-only internal bucket.
+If that bucket's smallest expected cell is below 5, merge its members into the
+smallest retained category (combined count; lexical tie-break). Require at least
+two resulting groups and every expected cell >=5 before chi-square. Otherwise
+INSUFFICIENT DATA; descriptive base-2 JS remains available when both samples exist.
+Internal group IDs distinguish the pooled bucket from literal user __MM_OTHER__.
+Persist raw category shares, new/disappeared names, threshold, membership and
+expected cells; raw category reporting is unchanged.
+
+Missingness is a separate 2x2 missing/observed comparison. Both missing counts zero:
+NOT DETECTED, no p-value. Otherwise all expected cells >=5 uses chi-square; any
+smaller cell uses two-sided Fisher. Persist missing percentages and signed pp delta.
+One run's feature BH family combines only actually calculated valid distribution
+and missingness p-values, excludes insufficient/no-p/zero-zero cases and uses q=.05.
+Persist family size and adjusted p on each feature signal. DETECTED requires
+adjusted p <.05; NOT DETECTED is neutral evidence, not proof of identical populations.
+
+Prediction shares use frozen class order, base-2 JS and the same categorical
+validity algorithm. Confidence is max class probability, with means, medians and
+KS. These two overall comparisons stay outside feature BH, using their raw p for
+status. KS comparisons require 30 values per sample. They cannot measure accuracy
+or calibration without labels.
+
+## M3 immutable visualization and publication
+
+Worker-prepared numeric plots use ten equal-width baseline-derived bins plus
+explicit overflow bins, expanding constant references by max(abs(value)*.01,.5).
+Confidence uses ten fixed bins on [0,1]. Normalize each sample by its own observed
+count and persist counts/shares and boundaries. Category/prediction charts render
+persisted raw shares. The frontend formats values but computes no statistical or
+histogram values. Tables accompany charts.
+
+Each attempt publishes to a private server-generated prefix. Job finalization,
+per-feature rows, run results, provenance and ANALYZED transition share one fenced
+PostgreSQL transaction. Results remain unavailable before that transaction commits.
+An analyzed run cannot be re-uploaded or re-analyzed; database triggers protect
+published run/feature updates and frozen run bindings. Run deletion checks active
+jobs and leaves recoverable deletion_pending state if object cleanup fails.
+History sorts descending monitoring date, creation timestamp, run ID.
+
+Fixed Mode A result templates state: Actual current predictive performance and
+calibration cannot be measured because ground-truth labels were not provided.
+Confidence change does not prove accuracy or calibration changed. No current
+outcome metrics, calibration, errors, slices, severity or retraining instructions
+are produced. Full deterministic report export remains the planned M5 work.

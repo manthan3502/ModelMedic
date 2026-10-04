@@ -139,9 +139,9 @@ def test_train_reload_establish_and_all_mutations_blocked(
         == 409
     )
     assert client.delete(f"/api/v1/projects/{project_id}").status_code == 409
-    # No API for changing deterministic preprocessing, nor monitoring functionality.
+    # Deterministic preprocessing stays immutable; monitoring requires valid run details.
     assert client.put(f"/api/v1/projects/{project_id}/preprocessing", json={}).status_code == 404
-    assert client.post(f"/api/v1/projects/{project_id}/runs", json={}).status_code == 404
+    assert client.post(f"/api/v1/projects/{project_id}/runs", json={}).status_code == 422
 
 
 def trained(setup_client):

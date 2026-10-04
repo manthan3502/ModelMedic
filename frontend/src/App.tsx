@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Projects, CreateProject } from './Projects'
 import { Setup } from './Setup'
+import { MonitoringWorkspace, NewRun, ProjectMonitoring } from './Monitoring'
 
 function Methodology() {
   return <div className="prose"><p className="eyebrow">Reference</p><h1>Methodology</h1>
@@ -18,7 +19,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   useEffect(() => {
     const title = location.pathname === '/projects' ? 'Projects'
-      : location.pathname === '/methodology' ? 'Methodology' : location.pathname.startsWith('/projects/') ? 'Baseline setup' : 'Page not found'
+      : location.pathname === '/methodology' ? 'Methodology' : location.pathname.startsWith('/runs/') ? 'Monitoring run' : location.pathname.includes('/setup/') ? 'Baseline setup' : location.pathname.startsWith('/projects/') ? 'Project' : 'Page not found'
     document.title = `${title} · ModelMedic`
     if (previousPath.current !== location.pathname) main.current?.focus()
     previousPath.current = location.pathname
@@ -41,6 +42,10 @@ export function App() {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/new" element={<CreateProject />} />
         <Route path="/projects/:id/setup/:step" element={<Setup />} />
+        <Route path="/projects/:id/runs/new" element={<NewRun />} />
+        <Route path="/projects/:id/:section" element={<ProjectMonitoring />} />
+        <Route path="/runs/:runId/:section" element={<MonitoringWorkspace />} />
+        <Route path="/runs/:runId/features/:featureId" element={<MonitoringWorkspace />} />
         <Route path="/methodology" element={<Methodology />} />
         <Route path="*" element={<div className="prose"><h1>Page not found</h1><p>This address is not part of the workspace.</p><Link to="/projects">Back to Projects</Link></div>} />
       </Routes>

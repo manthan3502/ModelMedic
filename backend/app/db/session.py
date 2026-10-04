@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.core.config import Settings
 
-SCHEMA_REVISION = "0003_m2"
+SCHEMA_REVISION = "0004_m3"
 
 
 def create_db(settings: Settings) -> tuple[Engine, sessionmaker[Session]]:

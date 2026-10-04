@@ -88,9 +88,9 @@ def target_info(values: list[str | None]) -> dict[str, Any]:
     }
 
 
-def validate_csv(
+def parse_csv(
     content: bytes, settings: Settings, on_stage: Callable[[str], None] | None = None
-) -> tuple[bytes, dict[str, Any]]:
+) -> tuple[list[str], list[list[str | None]]]:
     if len(content) > settings.upload_max_bytes:
         raise DatasetError("CSV exceeds the configured byte limit. Use a smaller file.")
     try:
@@ -125,6 +125,13 @@ def validate_csv(
         raise DatasetError("Malformed CSV. Check quoting, delimiters and cell sizes.") from None
     if not rows:
         raise DatasetError("CSV has no data rows. Include a header and observations.")
+    return headers, rows
+
+
+def validate_csv(
+    content: bytes, settings: Settings, on_stage: Callable[[str], None] | None = None
+) -> tuple[bytes, dict[str, Any]]:
+    headers, rows = parse_csv(content, settings, on_stage)
     columns = []
     arrays = [pa.array(range(len(rows)), type=pa.uint64())]
     for index, header in enumerate(headers):

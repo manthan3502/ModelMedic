@@ -52,3 +52,37 @@ in API paths. The canonical format deliberately stores lossless nullable strings
 plus uint64 row IDs; feature semantics and permitted conversions are separate
 from storage dtypes. See the README import contract for exact parser/serialization
 rules. No fitting or train/test split occurs during setup.
+
+
+## M2 and M3 extensions
+
+M2 (`0003_m2`) persists concrete training snapshots, guarded pipeline/manifest,
+all-row canonical drift reference, held-out reference and split membership.
+Establishment freezes the project/snapshot configuration fingerprint. The API
+never loads joblib; worker-only trusted artifact loading verifies hash and versions.
+
+M3 (`0004_m3`) adds monitoring metadata, exact snapshot binding, immutable result
+provenance and per-feature result rows. Scalar queried fields/status/p-values are
+normal columns; nested chart/pooling/evidence values are JSONB. History is indexed
+by project, monitoring date, creation timestamp and ID. Database triggers reject
+binding changes and published result mutation. No M4 result tables/calculations
+are introduced.
+
+Current uploads count bytes during streaming in a private temporary file, then
+lock the mutable run to publish a server-generated original key and enqueue
+DATASET_VALIDATE in one transaction. The shared strict CSV parser is reused;
+current semantic types come only from the established snapshot. A successful
+compatibility report exposes mode before the explicit analyze action.
+
+MONITORING_ANALYZE reads hash-verified immutable canonical and held-out artifacts,
+loads the frozen pipeline in the worker, predicts only on current rows and computes
+raw observed-value drift separately from missingness. Histogram/share/test output
+is prepared once by the worker. Existing lease/owner/attempt fences atomically
+publish feature rows, nested results, object hash, provenance and ANALYZED state.
+API routes only serialize stored outputs. Failure/stale ownership exposes no
+partial final result. Analyzed run uploads/reanalysis are rejected.
+
+Deletion checks active jobs, records deletion_pending before removing the private
+run prefix and cascades run/result/job/import metadata afterward. External cleanup
+failure remains recoverable by retry. Existing M2 draft-artifact cleanup behavior
+is preserved. Full report export and labeled monitoring remain future milestones.

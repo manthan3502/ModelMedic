@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -104,6 +104,7 @@ class ModelArtifact(Identity, Base):
 
 class MonitoringRun(Identity, Base):
     __tablename__ = "monitoring_runs"
+    __table_args__ = (Index("ix_run_history", "project_id", "monitoring_date", "created_at", "id"),)
     project_id: Mapped[UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
     dataset_id: Mapped[UUID | None] = mapped_column(ForeignKey("datasets.id", ondelete="SET NULL"))
     baseline_snapshot_id: Mapped[UUID] = mapped_column(
@@ -111,6 +112,36 @@ class MonitoringRun(Identity, Base):
     )
     name: Mapped[str] = mapped_column(String(200))
     state: Mapped[str] = mapped_column(String(32), server_default="UPLOADED")
+    monitoring_date: Mapped[date]
+    notes: Mapped[str | None]
+    mode: Mapped[str | None] = mapped_column(String(1))
+    row_count: Mapped[int | None]
+    methodology_version: Mapped[str | None] = mapped_column(String(32))
+    code_version: Mapped[str | None] = mapped_column(String(40))
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deletion_pending: Mapped[bool] = mapped_column(server_default="false")
+    results: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    result_object_key: Mapped[str | None]
+    result_sha256: Mapped[str | None] = mapped_column(String(64))
+
+
+class RunFeatureResult(Base):
+    __tablename__ = "run_feature_results"
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    feature_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    feature_name: Mapped[str]
+    feature_type: Mapped[str] = mapped_column(String(16))
+    distribution_status: Mapped[str] = mapped_column(String(32))
+    missingness_status: Mapped[str] = mapped_column(String(32))
+    raw_p_value: Mapped[float | None]
+    adjusted_p_value: Mapped[float | None]
+    missing_p_value: Mapped[float | None]
+    missing_adjusted_p_value: Mapped[float | None]
+    baseline_valid_n: Mapped[int]
+    current_valid_n: Mapped[int]
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
 class Job(Identity, Base):

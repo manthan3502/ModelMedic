@@ -23,6 +23,7 @@ export type BaselineResults = {
   features: (Column & { frozen_type: FeatureType })[]
 }
 export type Project = {
+  run_count?: number
   baseline?: null | { id: string; status: string; fingerprint: string; established_at: string | null; error_message: string | null; results: BaselineResults | null }
 
   id: string; name: string; description: string | null; state: string; deletion_pending: boolean

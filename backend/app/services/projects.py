@@ -2,11 +2,11 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
-from backend.app.db.models import BaselineSnapshot, Dataset, Job, Project
+from backend.app.db.models import BaselineSnapshot, Dataset, Job, MonitoringRun, Project
 from backend.app.domain.datasets import preprocessing_summary
 
 
@@ -59,6 +59,11 @@ def project_view(session: Session, project: Project, settings: Settings) -> dict
         "updated_at": project.updated_at.isoformat(),
         "configuration": config,
         "baseline": snapshot_view(snapshot),
+        "run_count": session.scalar(
+            select(func.count())
+            .select_from(MonitoringRun)
+            .where(MonitoringRun.project_id == project.id)
+        ),
         "limits": {
             "upload_max_bytes": settings.upload_max_bytes,
             "max_rows": settings.max_rows,

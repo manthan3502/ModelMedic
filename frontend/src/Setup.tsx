@@ -21,12 +21,12 @@ export function Setup() {
     if (p.state !== 'DRAFT') return false
     return steps.some(([known]) => known === slug) && (slug === 'upload' || ready && (['profile', 'features'].includes(slug) || configured && (slug !== 'confirm' || Boolean(p.confirmation))))
   }
-  return <><div className="page-heading"><div><p className="eyebrow">Baseline setup · {p.state}</p><h1>{p.name}</h1><p>{p.description}</p></div><Link to="/projects">All projects</Link></div>
+  return <><div className="page-heading"><div><p className="eyebrow">Baseline setup · {p.state}</p><h1>{p.name}</h1><p>{p.description}</p></div><div>{p.baseline?.status === "ESTABLISHED" && <Link className="button" to={`/projects/${id}/overview`}>Open project</Link>} <Link to="/projects">All projects</Link></div></div>
     <div className="setup-layout"><aside className="stepper" aria-label="Baseline setup steps"><ol>{steps.map(([slug, title], i) => <li key={slug}>
       {available(slug) ? <Link to={`/projects/${id}/setup/${slug}`} aria-current={step === slug ? 'step' : undefined}><span className="mono">{i + 1}</span> {title} <small>{step === slug ? 'Current' : completed[slug] ? 'Complete' : 'Not started'}</small></Link>
         : <span><span className="mono">{i + 1}</span> {title}<small>{completed[slug] ? "Complete" : "Not started"}</small></span>}</li>)}</ol></aside>
       <div className="setup-content">{p.deletion_pending ? <div className="notice error" role="alert">Project deletion needs attention. Retry deletion from Upload.</div> : null}
-        {!available(step) ? <div className="notice"><h2>{p.state === "BASELINE_READY" ? "Baseline is locked" : "Finish the preceding setup steps"}</h2><Link to={`/projects/${id}/setup/${p.state === "BASELINE_READY" ? "results" : "upload"}`}>{p.state === "BASELINE_READY" ? "Review frozen baseline" : "Go to Upload"}</Link></div>
+        {!available(step) ? <div className="notice"><h2>{p.state !== "DRAFT" ? "Baseline is locked" : "Finish the preceding setup steps"}</h2><Link to={`/projects/${id}/setup/${p.state !== "DRAFT" ? "results" : "upload"}`}>{p.state !== "DRAFT" ? "Review frozen baseline" : "Go to Upload"}</Link></div>
           : step === 'results' ? <BaselineResultsView p={p} /> : step === 'establish' ? <Establish p={p} /> : step === 'upload' ? <Upload p={p} /> : step === 'profile' ? <Profile p={p} /> : step === 'features' ? <Features key={p.dataset?.id} p={p} />
             : step === 'preprocessing' ? <Preprocessing p={p} /> : step === 'model' ? <Model key={p.dataset?.id} p={p} /> : <Confirmation p={p} />}</div></div></>
 }
