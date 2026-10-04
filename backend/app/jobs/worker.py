@@ -8,7 +8,10 @@ from backend.app.core.logging import configure_logging
 from backend.app.db.models import Job
 from backend.app.db.session import check_schema, create_db
 from backend.app.domain.jobs import OwnershipLost
+from backend.app.jobs.datasets import validation_result
 from backend.app.services.queue import Queue
+from backend.app.storage.base import ArtifactStore
+from backend.app.storage.local import LocalArtifactStore
 
 logger = logging.getLogger("modelmedic")
 
@@ -19,7 +22,13 @@ def execute_dummy(job: Job) -> None:
     # Intentionally no scientific behavior, artifacts or application mutations.
 
 
-def run_once(queue: Queue, worker_id: UUID, heartbeat_seconds: float) -> bool:
+def run_once(
+    queue: Queue,
+    worker_id: UUID,
+    heartbeat_seconds: float,
+    store: ArtifactStore | None = None,
+    settings: Settings | None = None,
+) -> bool:
     queue.heartbeat(worker_id)
     queue.recover_stale()
     job = queue.claim()
@@ -39,9 +48,14 @@ def run_once(queue: Queue, worker_id: UUID, heartbeat_seconds: float) -> bool:
     thread = Thread(target=pulse, daemon=True)
     thread.start()
     failed = False
+    result = None
+    canonical_key = None
     try:
         queue.heartbeat(worker_id, job)
-        execute_dummy(job)
+        if job.job_type == "DATASET_VALIDATE" and store and settings:
+            result, canonical_key = validation_result(queue, job, store, settings)
+        else:
+            execute_dummy(job)
     except Exception:
         failed = True
         logger.error("job_execution_failed", extra={"job_id": str(job.id)})
@@ -49,12 +63,16 @@ def run_once(queue: Queue, worker_id: UUID, heartbeat_seconds: float) -> bool:
         stop_heartbeat.set()
         thread.join()
     if ownership_lost.is_set():
+        if store and canonical_key:
+            store.delete(canonical_key)
         logger.warning("job_ownership_lost", extra={"job_id": str(job.id)})
         return True
     try:
-        queue.finalize(job, failed=failed)
+        queue.finalize(job, failed=failed, result=result)
         logger.info("job_finalized", extra={"job_id": str(job.id)})
     except OwnershipLost:
+        if store and canonical_key:
+            store.delete(canonical_key)
         logger.warning("job_ownership_lost", extra={"job_id": str(job.id)})
     return True
 
@@ -72,9 +90,10 @@ def main() -> None:
             raise RuntimeError("Demo mode does not run the worker")
         queue = Queue(sessions, settings.lease_seconds)
         worker_id = uuid4()
+        store = LocalArtifactStore(settings.artifact_root)
         logger.info("worker_started")
         while not stop.is_set():
-            run_once(queue, worker_id, settings.heartbeat_seconds)
+            run_once(queue, worker_id, settings.heartbeat_seconds, store, settings)
             stop.wait(settings.poll_seconds)
     finally:
         engine.dispose()

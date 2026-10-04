@@ -47,6 +47,21 @@ class LocalArtifactStore:
     def get(self, key: str) -> bytes:
         return self._path(key).read_bytes()
 
+    def put_file(self, key: str, source: Path) -> None:
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            try:
+                with source.open("rb") as stream:
+                    shutil.copyfileobj(stream, handle, length=64 * 1024)
+                handle.flush()
+                os.fsync(handle.fileno())
+                os.link(temporary, path)
+            finally:
+                handle.close()
+                temporary.unlink(missing_ok=True)
+
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
 

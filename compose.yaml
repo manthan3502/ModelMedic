@@ -9,6 +9,12 @@ x-backend: &backend
     MM_ENVIRONMENT: local
     MM_DEPLOYMENT_MODE: full
     MM_ARTIFACT_ROOT: /artifacts
+    MM_UPLOAD_MAX_BYTES: ${MM_UPLOAD_MAX_BYTES:-26214400}
+    MM_MAX_ROWS: ${MM_MAX_ROWS:-50000}
+    MM_MAX_COLUMNS: ${MM_MAX_COLUMNS:-100}
+    MM_MAX_FEATURES: ${MM_MAX_FEATURES:-50}
+    MM_MAX_CATEGORIES: ${MM_MAX_CATEGORIES:-100}
+    MM_MAX_ENCODED_COLUMNS: ${MM_MAX_ENCODED_COLUMNS:-2000}
   volumes:
     - artifacts:/artifacts
   depends_on:

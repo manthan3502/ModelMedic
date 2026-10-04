@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     lease_seconds: int = Field(default=30, ge=3)
     heartbeat_seconds: float = Field(default=5, ge=0.1)
     poll_seconds: float = Field(default=1, ge=0.1)
+    upload_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1)
+    max_rows: int = Field(default=50_000, ge=1)
+    max_columns: int = Field(default=100, ge=1)
+    max_features: int = Field(default=50, ge=1)
+    max_categories: int = Field(default=100, ge=1, le=100)
+    max_encoded_columns: int = Field(default=2_000, ge=1)
 
     @model_validator(mode="after")
     def valid_runtime(self) -> Self:

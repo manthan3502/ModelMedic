@@ -13,11 +13,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from backend.app.api.projects import project_router
 from backend.app.core.config import Settings
 from backend.app.core.logging import configure_logging
 from backend.app.db.models import Job, WorkerStatus
 from backend.app.db.session import check_schema, create_db
 from backend.app.schemas.jobs import JobResponse
+from backend.app.storage.local import LocalArtifactStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -32,6 +34,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine.dispose()
 
     app = FastAPI(title="ModelMedic", version="0.0.0", lifespan=lifespan)
+    app.include_router(
+        project_router(sessions, LocalArtifactStore(settings.artifact_root), settings)
+    )
 
     def error(request: Request, status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse(

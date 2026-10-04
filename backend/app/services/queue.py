@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -106,7 +107,26 @@ class Queue:
                 if owned is None:
                     raise OwnershipLost
 
-    def finalize(self, job: Job, *, failed: bool = False) -> None:
+    def stage(self, job: Job, stage: str) -> None:
+        with self.sessions.begin() as session:
+            owned = session.scalar(
+                update(Job)
+                .where(
+                    Job.id == job.id,
+                    Job.owner_token == job.owner_token,
+                    Job.attempt == job.attempt,
+                    Job.state == JobState.RUNNING,
+                    Job.lease_expires_at > func.clock_timestamp(),
+                )
+                .values(stage=stage)
+                .returning(Job.id)
+            )
+            if owned is None:
+                raise OwnershipLost
+
+    def finalize(
+        self, job: Job, *, failed: bool = False, result: Callable[[Session], None] | None = None
+    ) -> None:
         with self.sessions.begin() as session:
             owned = session.scalar(
                 update(Job)
@@ -130,4 +150,5 @@ class Queue:
             )
             if owned is None:
                 raise OwnershipLost
-            # Future result/state writes belong in this same fenced transaction.
+            if result:
+                result(session)  # Atomic with the fenced job transition; exceptions roll it back.

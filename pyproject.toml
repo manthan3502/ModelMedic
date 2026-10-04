@@ -1,7 +1,7 @@
 [project]
 name = "modelmedic"
 version = "0.0.0"
-description = "ModelMedic M0 platform foundation"
+description = "ModelMedic baseline dataset setup"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi>=0.115,<1",
@@ -10,6 +10,7 @@ dependencies = [
   "psycopg[binary]>=3.2,<4",
   "alembic>=1.15,<2",
   "pydantic-settings>=2.8,<3",
+  "pyarrow>=21,<22",
 ]
 
 [dependency-groups]

@@ -21,6 +21,39 @@ class Project(Identity, Base):
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None]
     state: Mapped[str] = mapped_column(String(32), server_default="DRAFT")
+    setup: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    target_feature_id: Mapped[str | None] = mapped_column(String(16))
+    positive_class: Mapped[str | None]
+    classifier: Mapped[str | None] = mapped_column(String(32))
+    class_weight_mode: Mapped[str | None] = mapped_column(String(16))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deletion_pending: Mapped[bool] = mapped_column(server_default="false")
+
+    @property
+    def configuration(self) -> dict[str, Any]:
+        if not self.setup:
+            return {}
+        return {
+            **self.setup,
+            "target_id": self.target_feature_id,
+            "positive_class": self.positive_class,
+            "classifier": self.classifier,
+            "weighting": self.class_weight_mode,
+        }
+
+    @configuration.setter
+    def configuration(self, value: dict[str, Any]) -> None:
+        self.target_feature_id = value.get("target_id")
+        self.positive_class = value.get("positive_class")
+        self.classifier = value.get("classifier")
+        self.class_weight_mode = value.get("weighting")
+        self.setup = {
+            k: v
+            for k, v in value.items()
+            if k not in {"target_id", "positive_class", "classifier", "weighting"}
+        }
 
 
 class Dataset(Identity, Base):
@@ -29,6 +62,13 @@ class Dataset(Identity, Base):
     role: Mapped[str] = mapped_column(String(16))
     original_object_key: Mapped[str]
     canonical_object_key: Mapped[str | None]
+    status: Mapped[str] = mapped_column(String(32), server_default="UPLOADED")
+    canonical_sha256: Mapped[str | None] = mapped_column(String(64))
+    canonical_schema_version: Mapped[str | None] = mapped_column(String(32))
+    profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    validation_report: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    original_sha256: Mapped[str | None] = mapped_column(String(64))
+    uploaded_bytes: Mapped[int | None]
 
 
 class BaselineSnapshot(Identity, Base):

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { App } from '../src/App'
 
 function setup(route = '/projects', offline = false) {
-  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'ready' }) })
+  const fetchMock = vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.endsWith('/projects') ? [] : ({ status: 'ready' }) }))
   if (offline) fetchMock.mockRejectedValue(new Error('offline'))
   vi.stubGlobal('fetch', fetchMock)
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -19,7 +19,7 @@ describe('M0 shell', () => {
     setup('/')
     expect(await screen.findByRole('heading', { name: 'Projects', level: 1 })).toBeVisible()
     expect(screen.getByRole('link', { name: 'ModelMedic' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'New project' })).toBeDisabled()
+    expect(screen.getByRole('link', { name: 'New project' })).toHaveAttribute('href', '/projects/new')
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/health/ready'))
   })
   it('navigates with accessible links and restores reading context', async () => {
@@ -39,7 +39,7 @@ describe('M0 shell', () => {
     setup('/projects', true)
     expect(screen.getByRole('status')).toHaveTextContent('Connecting')
     await screen.findByRole('alert')
-    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ status: 'ready' })))
+    vi.mocked(fetch).mockImplementation(async (url) => new Response(JSON.stringify(String(url).endsWith('/projects') ? [] : { status: 'ready' })))
     await userEvent.click(screen.getByRole('button', { name: 'Retry connection' }))
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })

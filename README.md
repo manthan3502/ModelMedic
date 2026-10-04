@@ -6,13 +6,14 @@ performance changes. Data drift alone does not establish predictive degradation.
 
 ## Current status
 
-**M0 — Repository + Platform Foundation.** This repository contains the API,
-PostgreSQL schema, worker queue, private local artifact store and light-mode
-application shell. Project creation, CSV upload, profiling, training, monitoring,
-calibration and slices are **not implemented**. No analytical demo data is fabricated.
+**M1 — Dataset Upload, Validation & Project Setup.** Create a draft project,
+upload and validate a baseline CSV, inspect its profile, select target/positive
+class and feature types, review preprocessing, and select classifier/weighting.
+The flow ends at training confirmation. No model or preprocessing is fitted.
+Training, metrics, monitoring, calibration and drift are **not implemented**.
 
 The four [locked specifications](docs/specs/) are the source of truth. They remain
-unchanged; the next milestone is M1 — Dataset Upload, Validation & Project Setup.
+unchanged; M2 training and evaluation require a separately authorized milestone.
 
 ## Prerequisites
 
@@ -49,22 +50,25 @@ API and worker use the same built image and synchronous SQLAlchemy code.
 The Vite development proxy forwards `/api` to the API, so browser requests remain
 same-origin. The Compose frontend is a development service; a production host
 must serve the built assets on the API origin, as required by the locked architecture.
-No production deployment is part of M0.
+No production deployment is part of M1.
 
 `docker compose down` stops this stack while retaining the database and artifact
 volumes. Do not remove volumes containing data you need.
 
-## Complete M0 verification
+## Complete M1 verification (including M0 regressions)
 
 ```powershell
-./scripts/m0-gate.ps1
+./scripts/m1-gate.ps1
 ```
 
 The script stops on a failed command. It uses the separate Compose project
-`modelmedic-m0-gate`, ports 18000/15173, production API/worker images, a test-only
+`modelmedic-m1-verified`, ports 18004/15177, production API/worker images, a test-only
 image with the same locked dependencies plus development tools, and real PostgreSQL.
 It builds, migrates, starts all services, runs lint/type/tests/build and performs
-the end-to-end dummy-job smoke check. It leaves services running for inspection.
+the M0 dummy-job smoke check and the real M1 setup smoke through the frontend proxy.
+The latter checks all six classifier/weighting combinations, canonical SHA-256,
+row IDs and the absence of trained artifacts. It deletes its generated project.
+Services remain running for browser inspection.
 
 The integration suite creates a uniquely named disposable database using
 `TEST_DATABASE_URL` as its administrative connection. It migrates that empty
@@ -75,12 +79,13 @@ the complete gate**. The Compose override supplies it automatically.
 
 After the executable gate, review privacy, confirm locked specs are unchanged,
 inspect the diff/staging, then commit and push the milestone. A passing test suite
-alone is not a passing M0 milestone.
+alone is not a passing milestone. The archived M0 gate remains available as
+`./scripts/m0-gate.ps1`; its test commands now also include M1 regressions.
 
 To stop the verification stack without removing its data:
 
 ```powershell
-docker compose -p modelmedic-m0-gate down
+docker compose -p modelmedic-m1-verified down
 ```
 
 ## Individual checks and host development
@@ -126,15 +131,15 @@ most one retry; a second lost lease becomes `FAILED / WORKER_LOST`.
 
 ```text
 frontend/          React, Router, TanStack Query, tokens and component tests
-backend/app/api/   HTTP boundary reserved for route modules
+backend/app/api/   Project, upload and draft-configuration HTTP boundary
 backend/app/core/  Configuration and structured logging
 backend/app/db/    SQLAlchemy models and schema compatibility checks
-backend/app/domain/ Job states and errors
+backend/app/domain/ Job states, deterministic CSV/profile/configuration rules
 backend/app/schemas/ Response contracts
-backend/app/services/ Transactional queue services
+backend/app/services/ Transactional queue and project services
 backend/app/jobs/  Dedicated worker and internal developer command
 backend/app/storage/ ArtifactStore protocol and LocalArtifactStore
-backend/app/ml/    Placeholder only; no M0 scientific behavior
+backend/app/ml/    Placeholder only; no fitted preprocessing or models
 backend/tests/    Unit and real PostgreSQL integration tests
 migrations/       Explicit Alembic revision history
 scripts/          Complete gate and Docker smoke verification
@@ -149,10 +154,54 @@ paths, publishes complete objects atomically, and refuses overwrites. Its direct
 must remain controlled by the service account. The protocol permits a future private
 S3-compatible adapter without changing scientific logic.
 
-Local ports bind to loopback. This M0 stack has no authentication and must not be
+Local ports bind to loopback. This local stack has no authentication and must not be
 exposed publicly. Configuration outside local mode requires an explicit deployment
 mode. The basic demo guard denies non-GET requests, but full demo functionality
 and its product UI remain M6 work. No real datasets or model artifacts ship here.
 
 See [foundation architecture](docs/architecture.md) for queue transaction boundaries
-and [M0 verification](docs/m0-verification.md) for the recorded acceptance evidence.
+and the archived [M0 verification](docs/m0-verification.md) for foundation evidence.
+
+## Baseline setup and import contract
+
+Uploads use a raw CSV request body (`Content-Type: text/csv`), streamed to a
+server-controlled temporary file. The API counts actual bytes and rejects an
+oversized upload before publishing or queueing it. Filenames never determine
+storage paths. `DATASET_VALIDATE` runs in the existing leased PostgreSQL worker.
+Validation report and profile writes share the fenced job-finalization transaction.
+
+UTF-8 (optional BOM) is supported. Duplicate/empty headers, reserved `__mm_`
+headers, malformed row widths/quoting, empty data, unsafe encoding and resource
+limit violations produce reviewed diagnostics. Empty and whitespace-only cells
+become null. Literal `NA`, `N/A`, `None`, `null`, `unknown` and `?` remain values.
+Rows and categorical values are never silently deleted, trimmed or merged.
+
+Canonical Parquet v1 stores uint64 ordinal `__mm_row_id` and nullable Arrow
+strings for every user column. Keeping lexical values lossless allows numeric
+columns to be configured as categories without merging `001` and `1`. Numeric
+semantics are validated during inference/override review; numeric conversion and
+learned preprocessing belong to the later fitted pipeline. Original and canonical
+SHA-256, canonical schema version, profile and validation report are persisted.
+Serialization uses pinned PyArrow 21.0.0, Parquet 2.6, Zstandard, no dictionaries
+and no statistics. Revalidating identical bytes produces identical canonical bytes.
+
+Only eligible 2–10-class, fully labeled targets with at least 100 observations
+per class can be configured. Binary targets require an explicit positive class.
+Safe target-label whitespace normalization is blocked when it would merge labels.
+Discrete numeric labels are valid classes; continuous numeric outcomes outside the
+class cap and JSON list/object target cells are rejected. Feature inclusion is
+explicit; unsupported datetime,
+free-text and high-cardinality categorical features are visibly excluded with reasons.
+Encoded-column estimates conservatively include one missing bucket per categorical.
+
+Resource defaults are 25 MiB / 50,000 rows / 100 input columns / 50 included
+features / 100 categories / 2,000 encoded columns. `MM_*` settings in `.env.example`
+configure the computational limits; the UI displays the backend's actual limits.
+Pre-split support is enforced now. The authoritative actual held-out support
+check (at least 20 per class) is explained at confirmation and remains M2 work.
+
+Draft re-upload clears configuration. Active validation jobs block mutation and
+deletion; non-draft projects cannot be changed by M1 routes. Deletion removes the
+entire project artifact prefix and cascades metadata/jobs. An external deletion
+failure leaves `deletion_pending` for retry and blocks other changes. No new public
+demo/deployment features are added; the existing fail-closed guard covers all routes.

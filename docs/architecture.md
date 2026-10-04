@@ -31,3 +31,24 @@ This is implementation documentation, not a replacement for the locked
 
 Dependency versions are captured in `uv.lock` and `frontend/package-lock.json`.
 The Compose frontend is for development; production same-origin hosting is deferred.
+
+## M1 extension
+
+Revision `0002_m1` extends draft projects with normal target/positive-class/model/
+weighting/activity columns, nested setup selections, recoverable deletion state,
+and datasets with validation status, profile/report and hash/version metadata.
+M0 rows survive upgrade. No result/metric table or trained baseline is produced.
+
+Upload streaming holds no database transaction. Acceptance rechecks draft state
+and active jobs while locking the project, then atomically publishes server-keyed
+original CSV and queues validation metadata. Computation runs outside transactions.
+Canonical objects use attempt-specific write-once keys. Dataset results and job
+completion share a fenced transaction that also rechecks project/dataset lifecycle.
+Losing ownership removes that attempt's canonical publication.
+
+The profile and schema review preserve raw category spellings, only normalize
+empty/whitespace-only cells to null, and use stable feature IDs rather than headers
+in API paths. The canonical format deliberately stores lossless nullable strings
+plus uint64 row IDs; feature semantics and permitted conversions are separate
+from storage dtypes. See the README import contract for exact parser/serialization
+rules. No fitting or train/test split occurs during setup.

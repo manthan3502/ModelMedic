@@ -11,7 +11,7 @@ from sqlalchemy import func, inspect, select, text, update
 
 from backend.app.core.config import Settings
 from backend.app.db.models import Base, Job, WorkerStatus
-from backend.app.db.session import check_schema
+from backend.app.db.session import SCHEMA_REVISION, check_schema
 from backend.app.domain.jobs import DuplicateActiveJob, OwnershipLost
 from backend.app.jobs.worker import main as worker_main
 from backend.app.jobs.worker import run_once
@@ -65,7 +65,10 @@ def test_incompatible_schema_blocks_readiness_and_worker(database_url, db):
             worker_main()
     finally:
         with engine.begin() as connection:
-            connection.execute(text("UPDATE alembic_version SET version_num = '0001_m0'"))
+            connection.execute(
+                text("UPDATE alembic_version SET version_num = :revision"),
+                {"revision": SCHEMA_REVISION},
+            )
 
 
 def test_duplicate_active_job_and_completed_target_can_be_requeued(db):
@@ -140,6 +143,8 @@ def test_fencing_blocks_expired_replaced_and_double_finalization(db):
         queue.finalize(first)
     with pytest.raises(OwnershipLost):
         queue.heartbeat(uuid4(), first)
+    with pytest.raises(OwnershipLost):
+        queue.stage(first, "CHECKING_COLUMNS")
     queue.recover_stale()
     second = queue.claim()
     with pytest.raises(OwnershipLost):
