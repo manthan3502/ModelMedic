@@ -1,3 +1,4 @@
+import type { PerformanceResults, CalibrationResults, ErrorsResults } from './labeled'
 export type Signal = {
   baseline_n: number; current_n: number; test: string | null; statistic: number | null
   raw_p: number | null; adjusted_p: number | null; status: string; bh_family_size?: number
@@ -16,10 +17,11 @@ export type Run = {
   result_sha256: string | null; deletion_pending: boolean
   dataset: null | { id: string; status: string; validation_report: Validation | null; canonical_sha256: string | null; canonical_schema_version: string | null }
   job: null | { id: string; state: string; stage: string; error_message: string | null; started_at: string | null }
-  summary: null | { counts: Record<string, number>; tested_features: number; median_confidence: number }
+  summary: null | { counts: Record<string, number>; tested_features: number; median_confidence: number; performance?: Record<string, { value: number | null; reason: string | null }> }
 }
 export type MonitoringResults = {
-  mode: 'A'; limitation: string; frozen_statement: string; data_reference: string; model_reference: string
+  mode: 'A' | 'B'; limitation: string; frozen_statement: string; data_reference: string; model_reference: string
+  performance?: PerformanceResults; calibration?: CalibrationResults; errors?: ErrorsResults
   baseline_snapshot_id: string; code_version: string; methodology_version: string; canonical_sha256: string
   bh_family_size: number; counts: Record<string, number>; tested_features: number; missingness_detected: number
   features: FeatureResult[]; validation: Validation; limitations: string[]

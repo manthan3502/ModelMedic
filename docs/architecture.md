@@ -85,4 +85,32 @@ partial final result. Analyzed run uploads/reanalysis are rejected.
 Deletion checks active jobs, records deletion_pending before removing the private
 run prefix and cascades run/result/job/import metadata afterward. External cleanup
 failure remains recoverable by retry. Existing M2 draft-artifact cleanup behavior
-is preserved. Full report export and labeled monitoring remain future milestones.
+is preserved. Full report export remains future work.
+
+## M4 labeled monitoring extension
+
+Additive revision `0005_m4` adds `run_metrics`, `run_calibration_results` and
+`run_error_results`. Metric values, signed deltas, support, scope, class, status
+and reasons are normal columns. Nested calibration bins, confusion counts/rates,
+common pairs and bounded canonical row references are JSONB. Class composition is
+saved in the immutable run result. No full example rows are stored in PostgreSQL.
+
+The existing MONITORING_ANALYZE job accepts validated Mode A or Mode B. Mode B
+extends the existing stages with PERFORMANCE and CALIBRATION; both modes retain
+the same ownership/lease/attempt fence. All feature and labeled result rows are
+inserted while the run is READY and flushed before sealing it ANALYZED in the
+same finalization transaction. New result-table triggers reject updates and
+inserts against already analyzed runs. Results remain inaccessible before commit.
+
+Mode B performs frozen current inference once, reuses unchanged M3 drift and
+behavior analysis, and reads historical performance/calibration from the hashed
+M2 results artifact. Historical values must match the frozen snapshot metadata.
+No baseline value is reevaluated. API endpoints serialize saved evidence and
+never load a model or compute scientific statistics.
+
+The bounded error-example endpoint validates a saved view and canonical hash/
+schema version, projects only included model features plus internal row ID, then
+retrieves the saved row references. Arbitrary views/paths are rejected. Empty
+views use typed Arrow indices and return an empty table. React escapes cells.
+Mode A keeps the original unavailable contracts. Slices, trends and report
+generation are not implemented by M4.

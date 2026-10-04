@@ -144,6 +144,45 @@ class RunFeatureResult(Base):
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
+class RunMetric(Base):
+    __tablename__ = "run_metrics"
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    scope: Mapped[str] = mapped_column(String(16), primary_key=True)
+    class_label: Mapped[str] = mapped_column(primary_key=True)
+    metric_name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    baseline_value: Mapped[float | None]
+    current_value: Mapped[float | None]
+    delta: Mapped[float | None]
+    baseline_support: Mapped[int]
+    current_support: Mapped[int]
+    status: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str | None]
+    note: Mapped[str | None]
+
+
+class RunCalibrationResult(Base):
+    __tablename__ = "run_calibration_results"
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    class_label: Mapped[str] = mapped_column(primary_key=True)
+    baseline_n: Mapped[int]
+    current_n: Mapped[int]
+    status: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str | None]
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class RunErrorResult(Base):
+    __tablename__ = "run_error_results"
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
 class Job(Identity, Base):
     __tablename__ = "jobs"
     __table_args__ = (

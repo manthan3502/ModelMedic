@@ -20,13 +20,17 @@ from backend.app.db.models import (
     ModelArtifact,
     MonitoringRun,
     Project,
+    RunCalibrationResult,
+    RunErrorResult,
     RunFeatureResult,
+    RunMetric,
 )
 from backend.app.domain.datasets import SCHEMA_VERSION, DatasetError
 from backend.app.domain.jobs import OwnershipLost
 from backend.app.domain.monitoring import frozen_features, validate_current
 from backend.app.jobs.artifacts import load_trusted
 from backend.app.science.baseline import fingerprint
+from backend.app.science.labeled import analyze_mode_b
 from backend.app.science.monitoring import METHODOLOGY_VERSION, analyze_mode_a
 from backend.app.services.queue import Queue
 from backend.app.storage.base import ArtifactStore
@@ -124,8 +128,8 @@ def analysis_result(
     results: dict[str, Any] = {}
     digest = ""
     try:
-        if run.state != "READY" or run.mode != "A" or dataset.status != "READY":
-            raise DatasetError("Analysis requires successfully validated Mode A data.")
+        if run.state != "READY" or run.mode not in {"A", "B"} or dataset.status != "READY":
+            raise DatasetError("Analysis requires successfully validated current data.")
         if not re.fullmatch(r"[0-9a-f]{40}", settings.code_version):
             raise DatasetError(
                 "Build provenance is unavailable. Rebuild with the documented Git SHA."
@@ -169,22 +173,57 @@ def analysis_result(
             baseline.profile,
             config,
         )
-        if report["mode"] != "A" or sha256(canonical).hexdigest() != dataset.canonical_sha256:
+        if report["mode"] != run.mode or sha256(canonical).hexdigest() != dataset.canonical_sha256:
             raise DatasetError("Validated current data changed. Analysis was not published.")
         pipeline = load_trusted(store, artifact.storage_key, artifact.sha256, manifest)
         features = frozen_features(baseline.profile, config)
         if manifest["feature_types"] != {f["name"]: f["type"] for f in features}:
             raise DatasetError("Frozen feature semantics do not match the model manifest.")
-        results = analyze_mode_a(
-            pd.read_parquet(BytesIO(baseline_bytes)),
-            pd.read_parquet(BytesIO(current_bytes)),
-            pd.read_parquet(BytesIO(reference_bytes)),
-            features,
-            pipeline,
-            config["class_order"],
-            snapshot.results["importance"],
-            lambda s: queue.stage(job, s),
-        )
+        baseline_frame, current_frame, reference_frame = [
+            pd.read_parquet(BytesIO(data))
+            for data in (baseline_bytes, current_bytes, reference_bytes)
+        ]
+        if run.mode == "A":
+            results = analyze_mode_a(
+                baseline_frame,
+                current_frame,
+                reference_frame,
+                features,
+                pipeline,
+                config["class_order"],
+                snapshot.results["importance"],
+                lambda s: queue.stage(job, s),
+            )
+        else:
+            historical = json.loads(
+                checked(
+                    store,
+                    snapshot.artifact_prefix + "/results.json"
+                    if snapshot.artifact_prefix
+                    else None,
+                    snapshot.results["artifact_hashes"]["results.json"],
+                )
+            )
+            if any(historical[k] != snapshot.results[k] for k in ("metrics", "calibration")):
+                raise DatasetError("Historical baseline values failed integrity verification.")
+            target = next(
+                c["name"]
+                for c in baseline.profile["columns"]
+                if c["feature_id"] == config["target_id"]
+            )
+            results = analyze_mode_b(
+                baseline_frame,
+                current_frame,
+                reference_frame,
+                features,
+                pipeline,
+                config["class_order"],
+                snapshot.results["importance"],
+                historical,
+                target,
+                config["positive_class"],
+                lambda s: queue.stage(job, s),
+            )
         results.update(
             {
                 "baseline_snapshot_id": str(snapshot.id),
@@ -247,7 +286,37 @@ def analysis_result(
                     evidence=f,
                 )
             )
-        session.flush()  # Insert feature evidence while READY, before sealing the run.
+        if results["mode"] == "B":
+            performance = results["performance"]
+            rows = [("OVERALL", "", m) for m in performance["metrics"]] + [
+                ("CLASS", c["class"], m) for c in performance["per_class"] for m in c["metrics"]
+            ]
+            for scope, label, m in rows:
+                session.add(
+                    RunMetric(
+                        run_id=current.id,
+                        scope=scope,
+                        class_label=label,
+                        **{k: v for k, v in m.items() if k != "class_label"},
+                    )
+                )
+            calibration = results["calibration"]
+            for b, c in zip(
+                calibration["baseline"]["classes"], calibration["current"]["classes"], strict=True
+            ):
+                session.add(
+                    RunCalibrationResult(
+                        run_id=current.id,
+                        class_label=c["class"],
+                        baseline_n=calibration["baseline"]["support"],
+                        current_n=calibration["current"]["support"],
+                        status="UNAVAILABLE" if c["reason"] else "AVAILABLE",
+                        reason=c["reason"],
+                        evidence={"baseline": b, "current": c},
+                    )
+                )
+            session.add(RunErrorResult(run_id=current.id, evidence=results["errors"]))
+        session.flush()  # Insert scientific evidence while READY, before sealing the run.
         current.results = results
         current.result_object_key, current.result_sha256 = prefix + "/results.json", digest
         current.methodology_version, current.code_version = (

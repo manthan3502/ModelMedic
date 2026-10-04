@@ -166,7 +166,7 @@ def test_current_validation_blocks_without_silent_mode_fallback(setup_client, co
     assert message in r["dataset"]["validation_report"]["errors"][0]
 
 
-def test_mode_b_recognized_but_not_analyzed_and_categorical_not_reinferred(setup_client):
+def test_mode_b_recognized_and_categorical_not_reinferred(setup_client):
     client, _, _, _ = setup_client
     project_id, _ = established(setup_client)
     run_id, r = uploaded(
@@ -176,7 +176,8 @@ def test_mode_b_recognized_but_not_analyzed_and_categorical_not_reinferred(setup
     )
     assert r["mode"] == "B" and r["state"] == "READY"
     assert r["dataset"]["validation_report"]["new_categories"][0]["categories"] == ["001"]
-    assert client.post(f"/api/v1/runs/{run_id}/analyze").status_code == 409
+    # M4 enables labeled analysis; the M3 frozen categorical-validation guarantee remains.
+    assert client.post(f"/api/v1/runs/{run_id}/analyze").status_code == 202
 
 
 def test_monitoring_finalization_fenced_failure_no_partial_results(setup_client):

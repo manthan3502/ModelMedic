@@ -14,6 +14,7 @@ from starlette.concurrency import run_in_threadpool
 from backend.app.core.config import Settings
 from backend.app.db.models import BaselineSnapshot, Dataset, Job, MonitoringRun
 from backend.app.science.monitoring import MODE_A_LIMITATION
+from backend.app.services.examples import error_examples
 from backend.app.services.monitoring import active_job, get_run, mutable_run, run_view
 from backend.app.services.projects import get_project
 from backend.app.storage.base import ArtifactStore
@@ -168,10 +169,8 @@ def monitoring_router(
             mutable_run(session, run)
             if run.state != "READY":
                 raise HTTPException(409, "Upload and successfully validate the current CSV first.")
-            if run.mode != "A":
-                raise HTTPException(
-                    409, "Mode B was detected. Labeled analysis is not available in M3."
-                )
+            if run.mode not in {"A", "B"}:
+                raise HTTPException(409, "A valid monitoring mode is required.")
             session.add(
                 Job(
                     job_type="MONITORING_ANALYZE",
@@ -225,13 +224,53 @@ def monitoring_router(
             return dict(results(session, run_id)["confidence"])
 
     @router.get("/runs/{run_id}/metrics")
+    def metrics(run_id: UUID) -> dict[str, Any]:
+        with sessions() as session:
+            data = results(session, run_id)
+            return (
+                dict(data["performance"])
+                if data["mode"] == "B"
+                else {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
+            )
+
     @router.get("/runs/{run_id}/calibration")
+    def calibration(run_id: UUID) -> dict[str, Any]:
+        with sessions() as session:
+            data = results(session, run_id)
+            return (
+                dict(data["calibration"])
+                if data["mode"] == "B"
+                else {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
+            )
+
     @router.get("/runs/{run_id}/errors")
+    def errors(run_id: UUID) -> dict[str, Any]:
+        with sessions() as session:
+            data = results(session, run_id)
+            return (
+                dict(data["errors"])
+                if data["mode"] == "B"
+                else {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
+            )
+
+    @router.get("/runs/{run_id}/errors/examples")
+    def examples(run_id: UUID, view: str = "fp") -> dict[str, Any]:
+        with sessions() as session:
+            data = results(session, run_id)
+            if data["mode"] != "B":
+                return {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
+            return error_examples(session, get_run(session, run_id), store, view)
+
     @router.get("/runs/{run_id}/slices")
     def unavailable(run_id: UUID) -> dict[str, Any]:
         with sessions() as session:
-            results(session, run_id)
-            return {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
+            data = results(session, run_id)
+            return {
+                "status": "UNAVAILABLE",
+                "reason": MODE_A_LIMITATION
+                if data["mode"] == "A"
+                else "Slice analysis is not available in this milestone.",
+            }
 
     @router.delete("/runs/{run_id}", status_code=204)
     def delete(run_id: UUID) -> None:

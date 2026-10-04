@@ -201,3 +201,69 @@ calibration cannot be measured because ground-truth labels were not provided.
 Confidence change does not prove accuracy or calibration changed. No current
 outcome metrics, calibration, errors, slices, severity or retraining instructions
 are produced. Full deterministic report export remains the planned M5 work.
+
+## M4 labeled comparisons
+
+Mode B requires every current row to have a valid target label in the exact frozen
+class list. Safe target whitespace normalization follows the existing validated
+target contract. Partial or unknown labels are rejected without Mode A fallback.
+The frozen preprocessing/model is never fitted or changed during monitoring.
+Probabilities are mapped from model class order to frozen baseline class order;
+binary metrics explicitly use `class_order.index(positive_class)`.
+
+Current performance reuses the locked M2 metric definitions: binary accuracy,
+balanced accuracy, precision, recall, F1, ROC-AUC, average precision, log loss and
+Brier; multiclass accuracy, balanced accuracy, macro precision/recall/F1, weighted
+F1, per-class precision/recall/F1/support, macro OvR ROC-AUC, log loss and the mean
+sum of squared probability errors across all frozen classes. Confusion matrices
+retain that same order. Historical values come from the hash-verified persisted
+M2 results artifact and must match snapshot metadata; they are not recalculated.
+
+Each comparison persists baseline/current values and supports, signed
+`delta = current - baseline` in metric units (not relative percentage change),
+availability, reason and caution. Mathematically undefined values use null with
+an explicit reason, never a fabricated zero or NaN. True class composition uses
+baseline held-out supports versus current ground-truth supports; predicted class
+distribution stays on the separate M3 Predictions page.
+
+Absent current classes make macro and balanced-accuracy direct comparisons
+unavailable rather than silently changing the class set. Invalid ROC-AUC and
+average precision are unavailable. Weighted F1 uses actual outcome supports;
+zero-support undefined components contribute no weight. Valid accuracy and
+per-class metrics remain visible. Log loss and Brier retain the full frozen
+probability space with the required caution:
+
+> Class composition changed; aggregate probability-metric deltas should be interpreted cautiously because the absent class has no current outcome support.
+
+Performance always exposes:
+
+> Small metric differences may reflect sampling variation. ModelMedic V1 does not estimate uncertainty intervals for performance changes.
+
+No performance significance test, uncertainty interval, degradation threshold,
+combined score or severity is introduced.
+
+## M4 calibration and errors
+
+Current reliability estimates reuse the existing locked quantile calibration
+method: 40–99 observations request 3 bins, 100–249 request 5, 250–499 request 8,
+and at least 500 request 10. Tied boundaries combine bins. Each binary/OvR curve
+requires at least 20 positive and 20 non-positive observations; otherwise it is
+Unavailable with the support reason. Below 250 observations the limited-support
+caution remains visible. Every bin stores mean predicted probability, observed
+frequency and count; available bin counts sum to labeled support.
+
+Baseline calibration is the historical persisted curve, including its support,
+warning and bins. Multiclass selection follows frozen class order. Absent current
+classes retain an unavailable current curve and a valid historical baseline curve.
+The chart uses fixed 0–1 axes, y=x, equal-sized focusable points and support tables.
+Brier is probabilistic prediction quality, not a standalone calibration score.
+No ECE, recalibration action or calibration verdict is implemented.
+
+Confusion matrices persist counts and actual-class row-normalized rates. A row
+with zero actual support has null rates and an explicit unavailable explanation.
+Binary TP/TN/FP/FN use the selected positive-class index. Multiclass off-diagonal
+pairs persist counts, actual support and rates, sorted by descending count with a
+deterministic pair-ID tie-break. Error examples persist only canonical row IDs,
+bounded to the first 50 per view. API retrieval reads hash-verified Parquet and
+only included model feature columns; excluded columns and target never appear in
+examples. Displayed cells are escaped text.

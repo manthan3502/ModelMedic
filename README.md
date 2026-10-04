@@ -6,10 +6,11 @@ performance changes. Data drift alone does not establish predictive degradation.
 
 ## Current status
 
-**M3 — Monitoring Core + Mode A.** Establish an immutable baseline, create a
-monitoring run, validate an unlabeled current CSV and inspect separate data,
-missingness, prediction and confidence evidence. Current performance/calibration,
-errors and slices remain explicitly unavailable without labels. Stop before M4.
+**M4 — Mode B Performance + Calibration + Errors.** Established baselines support
+unlabeled monitoring and fully labeled current datasets. Mode B adds measured
+performance, baseline/current calibration, true class composition and bounded
+canonical error examples. Mode A keeps outcome analyses explicitly unavailable.
+Slices, trends and reports remain later work. Stop before M5.
 
 The four [locked specifications](docs/specs/) remain unchanged. Scientific
 implementation details are documented in [methodology](docs/methodology.md).
@@ -51,24 +52,26 @@ API and worker use the same built image and synchronous SQLAlchemy code.
 The Vite development proxy forwards `/api` to the API, so browser requests remain
 same-origin. The Compose frontend is a development service; a production host
 must serve the built assets on the API origin, as required by the locked architecture.
-No production deployment is part of M3.
+No production deployment is part of M4.
 
 `docker compose down` stops this stack while retaining the database and artifact
 volumes. Do not remove volumes containing data you need.
 
-## Complete M3 verification (including M0, M1 and M2 regressions)
+## Complete M4 verification (including M0–M3 regressions)
 
 ```powershell
-./scripts/m3-gate.ps1
+./scripts/m4-gate.ps1
 ```
 
-The gate builds and explicitly migrates the four-service `modelmedic-m3-verified`
-stack (API 18006, frontend 15179), runs all scientific/PostgreSQL/backend/frontend
+The gate builds and explicitly migrates the four-service `modelmedic-m4-verified`
+stack (API 18008, frontend 15181), runs all scientific/PostgreSQL/backend/frontend
 checks, and exercises all 12 binary/multiclass × classifier × weighting
 combinations through the real frontend proxy and leased worker. It verifies
 training, artifacts, establishment and immutability, then binary/multiclass Mode A
-validation, drift, predictions, confidence and immutable reloads. Synthetic smoke projects
-are removed using test-only cleanup; no product unlock route exists.
+validation, drift, predictions, confidence and immutable reloads. Mode B binary
+and multiclass smoke tests include complete support, absent classes, calibration,
+errors and privacy checks. Synthetic smoke projects are removed using test-only
+cleanup; no product unlock route exists.
 
 The PostgreSQL tests create and migrate a uniquely named disposable database,
 then remove only that database. The supplied connection needs CREATEDB. A run
@@ -83,7 +86,7 @@ the diff and locked files, and complete browser verification before committing.
 Services remain running for inspection. To stop without deleting data:
 
 ```powershell
-docker compose -p modelmedic-m3-verified down
+docker compose -p modelmedic-m4-verified down
 ```
 
 ## Individual checks and host development
@@ -239,11 +242,30 @@ missingness tests share one BH family; prediction/confidence comparisons remain
 separate. Every chart has numerical evidence and a table. Published outputs retain
 bins, shares, test membership, hashes, snapshot and code/methodology provenance.
 
-Complete valid labels identify Mode B, but M3 does not analyze labeled outcomes.
+Complete valid labels identify Mode B before an explicit Analyze action.
 Partial or unknown labels block validation; they never silently become Mode A.
 No severity score, accuracy degradation claim or automatic retraining instruction
 is generated. Run history preserves monitoring-date/timestamp/ID ordering.
 
-The executable gate runs all M0–M2 regressions, all M3 scientific/PostgreSQL/frontend
-checks and binary/multiclass real-stack monitoring smoke tests. Browser, privacy,
-locked-specification and Git checks are recorded in [M3 verification](docs/m3-verification.md).
+The historical M3 gate and [M3 verification](docs/m3-verification.md) remain
+available. The current gate adds labeled scientific/PostgreSQL/frontend checks;
+see [M4 verification](docs/m4-verification.md) for the complete milestone report.
+
+## Labeled monitoring workflow (M4)
+
+Upload a current CSV containing complete labels from the frozen class list →
+Review Mode B and compatibility → Analyze → Overview, Performance, Calibration
+and Classes & Errors. Partial labels or unknown classes are rejected rather than
+downgraded to Mode A. No preprocessing or model is refitted.
+
+Performance tables show saved baseline/current values, signed deltas in metric
+units, support and explicit availability reasons. True class mix precedes those
+tables. Missing current classes make class-set-sensitive comparisons unavailable;
+valid probability metrics retain the class-composition caution. Small differences
+may reflect sampling variation; V1 does not estimate performance uncertainty.
+
+Calibration compares persisted M2 baseline bins with current quantile bins,
+support and probability-quality metrics. Multiclass selection follows frozen
+class order. Error examples contain at most 50 canonical row references per view;
+the API reads only included feature columns from hash-verified canonical Parquet.
+No full example rows are copied into PostgreSQL.

@@ -185,3 +185,8 @@ th small { display: block; font-weight: normal; }
 .result-tabs a.active { background: #edf0f4; border-color: var(--baseline); }
 @media(max-width: 900px) { .run-layout { grid-template-columns: minmax(0,1fr); } .run-navigation { position: static; } .run-navigation nav { display: flex; flex-wrap: wrap; } .run-navigation .eyebrow { width: 100%; } }
 @media(max-width: 600px) { .evidence-frame dl { grid-template-columns: minmax(0,1fr); gap: 4px; } .evidence-frame dd { margin-bottom: 14px; } .paired-chart, .evidence-frame, .mode-banner { padding: 14px; } }
+
+.mode-b { border-left-color: var(--baseline, #49577b); background: #eef0f6; }
+.confusion-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.reliability circle:focus { outline: 2px solid #26736f; outline-offset: 3px; }
+@media (max-width: 1023px) { .confusion-comparison { grid-template-columns: 1fr; } }

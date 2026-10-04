@@ -246,7 +246,7 @@ def confidence_drift(base: Any, current: Any) -> dict[str, Any]:
     return result
 
 
-def predict_frozen(pipeline: Any, current: Any, classes: list[str]) -> tuple[Any, Any]:
+def predict_probabilities(pipeline: Any, current: Any, classes: list[str]) -> tuple[Any, Any]:
     model_order = [str(c) for c in pipeline.classes_]
     if set(model_order) != set(classes) or len(model_order) != len(classes):
         raise ValueError("Frozen model classes do not match the baseline manifest.")
@@ -264,6 +264,11 @@ def predict_frozen(pipeline: Any, current: Any, classes: list[str]) -> tuple[Any
     predictions = np.asarray(pipeline.predict(current), dtype=str)
     if not set(predictions).issubset(classes):
         raise ValueError("Frozen model predictions are outside the baseline class space.")
+    return predictions, probabilities
+
+
+def predict_frozen(pipeline: Any, current: Any, classes: list[str]) -> tuple[Any, Any]:
+    predictions, probabilities = predict_probabilities(pipeline, current, classes)
     return predictions, probabilities.max(axis=1)
 
 
@@ -276,9 +281,12 @@ def analyze_mode_a(
     classes: list[str],
     reliance: list[dict[str, Any]],
     on_stage: Callable[[str], None],
+    frozen_output: tuple[Any, Any] | None = None,
 ) -> dict[str, Any]:
     on_stage("PREDICTING")
-    predicted, confidence = predict_frozen(pipeline, current, classes)
+    predicted, confidence = (
+        frozen_output if frozen_output is not None else predict_frozen(pipeline, current, classes)
+    )
     on_stage("DATA_DRIFT")
     results = []
     for f in features:

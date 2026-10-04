@@ -79,6 +79,16 @@ def run_view(session: Session, run: MonitoringRun) -> dict[str, Any]:
             "counts": run.results["counts"],
             "tested_features": run.results["tested_features"],
             "median_confidence": run.results["confidence"]["current_median"],
+            **(
+                {
+                    "performance": {
+                        m["metric_name"]: {"value": m["current_value"], "reason": m["reason"]}
+                        for m in run.results["performance"]["metrics"]
+                    }
+                }
+                if run.mode == "B"
+                else {}
+            ),
         }
         if run.state == "ANALYZED" and run.results
         else None,
