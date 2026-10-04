@@ -4,6 +4,9 @@ x-backend: &backend
   build:
     context: .
     target: backend
+    args:
+      CODE_VERSION: ${MM_CODE_VERSION:-unknown}
+      CODE_DIRTY: ${MM_CODE_DIRTY:-true}
   environment: &backend-environment
     MM_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-modelmedic}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-modelmedic}
     MM_ENVIRONMENT: local

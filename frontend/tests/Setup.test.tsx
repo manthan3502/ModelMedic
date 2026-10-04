@@ -20,10 +20,10 @@ function setup(route: string, initial = fixture()) {
   const validated = fixture()
   const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
     if (init?.method === 'POST' && url === '/api/v1/projects') project = { ...project, dataset: null, job: null }
-    if (url.endsWith('/baseline') && init?.method === 'POST') project = validated
+    if (url.includes('/baseline?') && init?.method === 'POST') project = validated
     if (init?.method === 'PUT') {
       project = { ...project, configuration: JSON.parse(init.body as string), preprocessing: { steps: ['Raw columns', 'Handle missing values', 'Encode categories', 'Scale numeric values when required', 'Classifier'], numeric: 'Median imputation. StandardScaler for Logistic Regression only.', categorical: 'Explicit missing category and one-hot encoding.', learning: 'Learned from the Development 80% only.', frozen: 'Frozen after baseline establishment.', fitted: false }, confirmation: null }
-      if (project.configuration.classifier) project.confirmation = { ready: true, training_available: false, split: 'Stratified 80/20', cv: '5-fold Development CV', seed: 42, guardrail: 'Actual held-out support must be at least 20 rows per class.' }
+      if (project.configuration.classifier) project.confirmation = { ready: true, training_available: true, split: 'Stratified 80/20', cv: '5-fold Development CV', seed: 42, guardrail: 'Actual held-out support must be at least 20 rows per class.' }
     }
     return { ok: true, status: 200, json: async () => structuredClone(url === '/api/v1/projects' && !init ? [project] : url.endsWith('/health/ready') ? { status: 'ready' } : project) }
   })
@@ -62,7 +62,7 @@ describe('M1 baseline setup', () => {
     await user.click(screen.getByRole('radio', { name: 'Balanced' }))
     await user.click(screen.getByRole('button', { name: 'Review and train' }))
     expect(await screen.findByRole('heading', { name: 'Training Confirmation' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Train baseline' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Train baseline' })).toBeEnabled()
     expect(screen.getByText('Stratified 80/20')).toBeVisible()
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/train'))).toBe(false)
   })

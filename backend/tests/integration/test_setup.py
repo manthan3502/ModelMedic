@@ -96,7 +96,7 @@ def test_complete_setup_without_training_and_project_deletion(setup_client):
     response = client.put(f"/api/v1/projects/{project_id}/configuration", json=choice(p))
     assert response.status_code == 200, response.text
     p = response.json()
-    assert p["confirmation"]["ready"] and p["confirmation"]["training_available"] is False
+    assert p["confirmation"]["ready"] and p["confirmation"]["training_available"] is True
     assert p["preprocessing"]["fitted"] is False and p["configuration"]["class_order"] == [
         "class0",
         "class1",

@@ -7,6 +7,8 @@ from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
+    code_version: str = "unknown"
+    code_dirty: bool = True
     model_config = SettingsConfigDict(env_prefix="MM_", extra="ignore", hide_input_in_errors=True)
 
     database_url: str

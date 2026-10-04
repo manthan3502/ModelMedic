@@ -10,6 +10,9 @@ COPY backend ./backend
 COPY migrations ./migrations
 COPY alembic.ini ./
 RUN useradd --create-home --uid 10001 modelmedic && mkdir /artifacts && chown modelmedic /artifacts
+ARG CODE_VERSION=unknown
+ARG CODE_DIRTY=true
+ENV MM_CODE_VERSION=$CODE_VERSION MM_CODE_DIRTY=$CODE_DIRTY
 USER modelmedic
 CMD ["uvicorn", "backend.app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
 

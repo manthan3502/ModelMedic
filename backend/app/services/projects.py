@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
-from backend.app.db.models import Dataset, Job, Project
+from backend.app.db.models import BaselineSnapshot, Dataset, Job, Project
 from backend.app.domain.datasets import preprocessing_summary
 
 
@@ -46,6 +46,7 @@ def project_view(session: Session, project: Project, settings: Settings) -> dict
         .order_by(Job.created_at.desc(), Job.id.desc())
         .limit(1)
     )
+    snapshot = latest_snapshot(session, project.id)
     config = project.configuration
     complete = bool(config.get("classifier") and config.get("weighting"))
     return {
@@ -57,6 +58,7 @@ def project_view(session: Session, project: Project, settings: Settings) -> dict
         "created_at": project.created_at.isoformat(),
         "updated_at": project.updated_at.isoformat(),
         "configuration": config,
+        "baseline": snapshot_view(snapshot),
         "limits": {
             "upload_max_bytes": settings.upload_max_bytes,
             "max_rows": settings.max_rows,
@@ -83,24 +85,54 @@ def project_view(session: Session, project: Project, settings: Settings) -> dict
                 "state": job.state,
                 "stage": job.stage,
                 "error_message": job.error_message,
+                "job_type": job.job_type,
+                "started_at": job.started_at.isoformat() if job.started_at else None,
             }
             if job
             else None
         ),
-        "preprocessing": preprocessing_summary(config) if config else None,
+        "preprocessing": (
+            {**preprocessing_summary(config), "fitted": bool(snapshot and snapshot.results)}
+            if config
+            else None
+        ),
         "confirmation": (
             {
                 "ready": True,
-                "training_available": False,
+                "training_available": project.state == "DRAFT"
+                and not (job and job.state in {"QUEUED", "RUNNING"}),
                 "split": "Stratified 80/20",
                 "cv": "5-fold Development CV",
                 "seed": 42,
                 "guardrail": (
                     "Actual held-out support must be at least 20 rows per class, "
-                    "checked after the split during training. No split or model has been fitted."
+                    "checked after the split during training."
                 ),
             }
             if complete
             else None
         ),
+    }
+
+
+def latest_snapshot(session: Session, project_id: UUID) -> BaselineSnapshot | None:
+    return session.scalar(
+        select(BaselineSnapshot)
+        .where(BaselineSnapshot.project_id == project_id)
+        .order_by(BaselineSnapshot.created_at.desc(), BaselineSnapshot.id.desc())
+        .limit(1)
+    )
+
+
+def snapshot_view(snapshot: BaselineSnapshot | None) -> dict[str, Any] | None:
+    if snapshot is None:
+        return None
+    return {
+        "id": str(snapshot.id),
+        "status": snapshot.status,
+        "configuration": snapshot.configuration,
+        "fingerprint": snapshot.config_fingerprint,
+        "results": snapshot.results,
+        "error_message": snapshot.error_message,
+        "established_at": snapshot.established_at.isoformat() if snapshot.established_at else None,
     }

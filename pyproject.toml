@@ -11,6 +11,11 @@ dependencies = [
   "alembic>=1.15,<2",
   "pydantic-settings>=2.8,<3",
   "pyarrow>=21,<22",
+  "scikit-learn==1.7.2",
+  "numpy==2.3.3",
+  "scipy==1.16.2",
+  "pandas==2.3.3",
+  "joblib==1.5.2",
 ]
 
 [dependency-groups]
@@ -32,3 +37,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.12"
 strict = true
 files = ["backend/app", "migrations"]
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "pandas.*", "scipy.*", "joblib.*"]
+ignore_missing_imports = true

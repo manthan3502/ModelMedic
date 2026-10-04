@@ -131,3 +131,20 @@ legend { font-size: 17px; font-weight: 500; padding: 0; margin-block-end: 16px; 
 .delete-draft { margin-block-start: 40px; border-block-start: 1px solid var(--border); padding-block-start: 20px; }
 @media (max-width: 1000px) { .model-options { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .create-layout, .setup-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; } .stepper { position: static; } .stepper ol { display: flex; overflow-x: auto; } .stepper li { flex: 0 0 150px; } .panel { padding: 18px; } .confirmation { grid-template-columns: minmax(0, 1fr); gap: 4px; } .confirmation dd { margin-block-end: 12px; } }
+.reference-ribbon { display: grid; gap: .5rem; padding: 1.25rem; border-left: 4px solid #49577b; background: #eef0f6; margin-bottom: 1rem; }
+.reference-ribbon span { font-size: .85rem; color: #5b6473; }
+.result-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0; }
+.result-tabs button[aria-pressed=true] { border-color: #49577b; background: #eef0f6; }
+.training-stages { display: grid; gap: .5rem; padding-left: 1.5rem; }
+.training-stages small { margin-left: .5rem; color: #5b6473; }
+.training-stages [aria-current=step] { font-weight: 600; }
+.cv-diagnostics { margin: 2rem 0; border-top: 2px solid #c6cad4; padding-top: 1rem; }
+.cv-row { border-bottom: 1px solid #dce0e6; padding: .5rem 0; }
+.cv-row svg { max-width: 500px; width: 100%; }
+.cv-row .mono { overflow-wrap: anywhere; }
+.reliability { width: 100%; max-width: 580px; display: block; margin: 1rem 0; font-size: 12px; }
+.establish-review { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; }
+.discard-review { display: block; margin: 1rem 0; }
+.discard-review input { width: auto; margin-right: .5rem; }
+th small { display: block; font-weight: normal; }
+@media(max-width: 640px) { .establish-review { grid-template-columns: 1fr; } }

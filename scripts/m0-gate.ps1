@@ -15,6 +15,8 @@ function Invoke-Docker {
     & $docker @args
     if ($LASTEXITCODE -ne 0) { throw "Docker command failed: $($args -join ' ')" }
 }
+$env:MM_CODE_VERSION = (git rev-parse HEAD).Trim()
+$env:MM_CODE_DIRTY = if (git status --porcelain) { 'true' } else { 'false' }
 $env:API_PORT = $ApiPort
 $env:FRONTEND_PORT = $FrontendPort
 $composeArgs = @('compose', '-p', $ProjectName, '-f', 'compose.yaml')
@@ -25,7 +27,7 @@ Invoke-Docker @composeArgs up -d --wait postgres
 # One explicit migration step. API/worker never migrate on startup.
 Invoke-Docker @composeArgs run --rm --no-deps api alembic upgrade head
 Invoke-Docker @composeArgs up -d --wait
-Invoke-Docker build --target test -t modelmedic-backend:test .
+Invoke-Docker build --target test --build-arg "CODE_VERSION=$env:MM_CODE_VERSION" --build-arg "CODE_DIRTY=$env:MM_CODE_DIRTY" -t modelmedic-backend:test .
 Invoke-Docker @testArgs run --rm --no-deps -T api ruff check --no-cache backend migrations scripts
 Invoke-Docker @testArgs run --rm --no-deps -T api ruff format --check --no-cache backend migrations scripts
 Invoke-Docker @testArgs run --rm --no-deps -T api mypy --cache-dir /tmp/mypy

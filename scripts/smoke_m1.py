@@ -99,7 +99,7 @@ def main():
                     {**config, "classifier": classifier, "weighting": weighting},
                 )
                 assert project["confirmation"]["ready"]
-                assert project["confirmation"]["training_available"] is False
+                assert project["confirmation"]["training_available"] is True
         with sessions() as session:
             after = [
                 session.scalar(select(func.count()).select_from(table))

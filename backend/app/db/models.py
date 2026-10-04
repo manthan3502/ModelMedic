@@ -77,6 +77,18 @@ class BaselineSnapshot(Identity, Base):
     dataset_id: Mapped[UUID] = mapped_column(ForeignKey("datasets.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(32))
     config_fingerprint: Mapped[str]
+    configuration: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    development_count: Mapped[int | None]
+    heldout_count: Mapped[int | None]
+    split_seed: Mapped[int | None]
+    split_membership_object_key: Mapped[str | None]
+    heldout_reference_object_key: Mapped[str | None]
+    artifact_prefix: Mapped[str | None]
+    methodology_version: Mapped[str | None]
+    code_version: Mapped[str | None]
+    results: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None]
+    established_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ModelArtifact(Identity, Base):
@@ -87,6 +99,7 @@ class ModelArtifact(Identity, Base):
     )
     storage_key: Mapped[str] = mapped_column(unique=True)
     sha256: Mapped[str] = mapped_column(String(64))
+    environment_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
 
 
 class MonitoringRun(Identity, Base):

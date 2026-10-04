@@ -6,14 +6,13 @@ performance changes. Data drift alone does not establish predictive degradation.
 
 ## Current status
 
-**M1 — Dataset Upload, Validation & Project Setup.** Create a draft project,
-upload and validate a baseline CSV, inspect its profile, select target/positive
-class and feature types, review preprocessing, and select classifier/weighting.
-The flow ends at training confirmation. No model or preprocessing is fitted.
-Training, metrics, monitoring, calibration and drift are **not implemented**.
+**M2 — Baseline Training, Evaluation & Lock.** Complete baseline setup, explicitly
+train one selected classifier, inspect development diagnostics separately from
+held-out evaluation, and establish an immutable baseline. Monitoring and drift
+are not implemented. Stop before M3.
 
-The four [locked specifications](docs/specs/) are the source of truth. They remain
-unchanged; M2 training and evaluation require a separately authorized milestone.
+The four [locked specifications](docs/specs/) remain unchanged. Scientific
+implementation details are documented in [methodology](docs/methodology.md).
 
 ## Prerequisites
 
@@ -31,6 +30,8 @@ Do not commit `.env`. PostgreSQL is accessible only on the internal Compose netw
 ```powershell
 Copy-Item .env.example .env
 # Edit .env and replace the password placeholder before proceeding.
+$env:MM_CODE_VERSION = (git rev-parse HEAD).Trim()
+$env:MM_CODE_DIRTY = if (git status --porcelain) { 'true' } else { 'false' }
 docker compose config --quiet
 docker compose build
 docker compose up -d --wait postgres
@@ -50,42 +51,38 @@ API and worker use the same built image and synchronous SQLAlchemy code.
 The Vite development proxy forwards `/api` to the API, so browser requests remain
 same-origin. The Compose frontend is a development service; a production host
 must serve the built assets on the API origin, as required by the locked architecture.
-No production deployment is part of M1.
+No production deployment is part of M2.
 
 `docker compose down` stops this stack while retaining the database and artifact
 volumes. Do not remove volumes containing data you need.
 
-## Complete M1 verification (including M0 regressions)
+## Complete M2 verification (including M0 and M1 regressions)
 
 ```powershell
-./scripts/m1-gate.ps1
+./scripts/m2-gate.ps1
 ```
 
-The script stops on a failed command. It uses the separate Compose project
-`modelmedic-m1-verified`, ports 18004/15177, production API/worker images, a test-only
-image with the same locked dependencies plus development tools, and real PostgreSQL.
-It builds, migrates, starts all services, runs lint/type/tests/build and performs
-the M0 dummy-job smoke check and the real M1 setup smoke through the frontend proxy.
-The latter checks all six classifier/weighting combinations, canonical SHA-256,
-row IDs and the absence of trained artifacts. It deletes its generated project.
-Services remain running for browser inspection.
+The gate builds and explicitly migrates the four-service `modelmedic-m2-verified`
+stack (API 18005, frontend 15178), runs all scientific/PostgreSQL/backend/frontend
+checks, and exercises all 12 binary/multiclass × classifier × weighting
+combinations through the real frontend proxy and leased worker. It verifies
+training, artifacts, establishment and immutability. Synthetic smoke projects
+are removed using test-only cleanup; no product unlock route exists.
 
-The integration suite creates a uniquely named disposable database using
-`TEST_DATABASE_URL` as its administrative connection. It migrates that empty
-database, verifies ORM/migration agreement and removes **only that test database**.
-Its user needs `CREATEDB`. The supplied database is not truncated or dropped.
-Tests without `TEST_DATABASE_URL` skip integration tests and **do not constitute
-the complete gate**. The Compose override supplies it automatically.
+The PostgreSQL tests create and migrate a uniquely named disposable database,
+then remove only that database. The supplied connection needs CREATEDB. A run
+without TEST_DATABASE_URL skips integration tests and is not a complete gate.
+The Compose test override supplies the connection automatically.
 
-After the executable gate, review privacy, confirm locked specs are unchanged,
-inspect the diff/staging, then commit and push the milestone. A passing test suite
-alone is not a passing milestone. The archived M0 gate remains available as
-`./scripts/m0-gate.ps1`; its test commands now also include M1 regressions.
+The M0/M1 gate scripts remain regression entry points. The M1 flow still stops
+at confirmation without training; M2 enables training only after explicit action.
+After the executable gate, run `uv run python scripts/privacy_check.py`, inspect
+the diff and locked files, and complete browser verification before committing.
 
-To stop the verification stack without removing its data:
+Services remain running for inspection. To stop without deleting data:
 
 ```powershell
-docker compose -p modelmedic-m1-verified down
+docker compose -p modelmedic-m2-verified down
 ```
 
 ## Individual checks and host development
@@ -105,7 +102,8 @@ npm run build
 npm run dev
 ```
 
-For host API/worker development, set `MM_DATABASE_URL` to a reachable
+For host API/worker development, set `MM_CODE_VERSION` and `MM_CODE_DIRTY` as
+above, and set `MM_DATABASE_URL` to a reachable
 `postgresql+psycopg://...` connection, run `uv run alembic upgrade head`, then run
 `uv run uvicorn backend.app.main:create_app --factory --no-access-log` and
 `uv run python -m backend.app.jobs.worker` in separate terminals. There is no
@@ -139,7 +137,7 @@ backend/app/schemas/ Response contracts
 backend/app/services/ Transactional queue and project services
 backend/app/jobs/  Dedicated worker and internal developer command
 backend/app/storage/ ArtifactStore protocol and LocalArtifactStore
-backend/app/ml/    Placeholder only; no fitted preprocessing or models
+backend/app/science/ Deterministic split, pipeline, metrics, calibration and importance
 backend/tests/    Unit and real PostgreSQL integration tests
 migrations/       Explicit Alembic revision history
 scripts/          Complete gate and Docker smoke verification
@@ -198,10 +196,28 @@ Resource defaults are 25 MiB / 50,000 rows / 100 input columns / 50 included
 features / 100 categories / 2,000 encoded columns. `MM_*` settings in `.env.example`
 configure the computational limits; the UI displays the backend's actual limits.
 Pre-split support is enforced now. The authoritative actual held-out support
-check (at least 20 per class) is explained at confirmation and remains M2 work.
+check (at least 20 per class) is enforced during M2 training before fitting.
 
 Draft re-upload clears configuration. Active validation jobs block mutation and
-deletion; non-draft projects cannot be changed by M1 routes. Deletion removes the
+deletion; established projects cannot be changed by baseline mutation routes. Deletion removes the
 entire project artifact prefix and cascades metadata/jobs. An external deletion
 failure leaves `deletion_pending` for retry and blocks other changes. No new public
 demo/deployment features are added; the existing fail-closed guard covers all routes.
+
+## Baseline training and locking
+
+Each leased BASELINE_TRAIN execution creates an attempt snapshot. No scientific
+work runs inside an HTTP request or while holding the queue claim transaction.
+Results and the terminal job transition publish in the same ownership-fenced
+transaction. Artifact keys include the snapshot ID and cannot be overwritten.
+
+Changing a trained draft requires explicit discard confirmation. Establishment
+requires a TRAINED snapshot with the current dataset/configuration fingerprint,
+and atomically freezes it with the project. Existing baseline-changing APIs
+then return 409. A different baseline requires a new project.
+
+The manifest records Git SHA, dirty/clean build state, source-content digest,
+scientific versions and artifact SHA-256. Rebuild after committing to stamp
+new training attempts with the final commit; historical manifests never change.
+Only the worker loads internally generated joblib artifacts, after integrity,
+format, Python-minor and exact scikit-learn checks.

@@ -9,6 +9,7 @@ from backend.app.db.models import Job
 from backend.app.db.session import check_schema, create_db
 from backend.app.domain.jobs import OwnershipLost
 from backend.app.jobs.datasets import validation_result
+from backend.app.jobs.training import training_result
 from backend.app.services.queue import Queue
 from backend.app.storage.base import ArtifactStore
 from backend.app.storage.local import LocalArtifactStore
@@ -50,10 +51,13 @@ def run_once(
     failed = False
     result = None
     canonical_key = None
+    training_prefix = None
     try:
         queue.heartbeat(worker_id, job)
         if job.job_type == "DATASET_VALIDATE" and store and settings:
             result, canonical_key = validation_result(queue, job, store, settings)
+        elif job.job_type == "BASELINE_TRAIN" and store and settings:
+            result, training_prefix, failed = training_result(queue, job, store, settings)
         else:
             execute_dummy(job)
     except Exception:
@@ -63,6 +67,8 @@ def run_once(
         stop_heartbeat.set()
         thread.join()
     if ownership_lost.is_set():
+        if store and training_prefix:
+            store.delete_prefix(training_prefix)
         if store and canonical_key:
             store.delete(canonical_key)
         logger.warning("job_ownership_lost", extra={"job_id": str(job.id)})
@@ -71,6 +77,8 @@ def run_once(
         queue.finalize(job, failed=failed, result=result)
         logger.info("job_finalized", extra={"job_id": str(job.id)})
     except OwnershipLost:
+        if store and training_prefix:
+            store.delete_prefix(training_prefix)
         if store and canonical_key:
             store.delete(canonical_key)
         logger.warning("job_ownership_lost", extra={"job_id": str(job.id)})
