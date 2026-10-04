@@ -1,0 +1,54 @@
+name: modelmedic
+x-backend: &backend
+  image: modelmedic-backend:local
+  build:
+    context: .
+    target: backend
+  environment: &backend-environment
+    MM_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-modelmedic}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-modelmedic}
+    MM_ENVIRONMENT: local
+    MM_DEPLOYMENT_MODE: full
+    MM_ARTIFACT_ROOT: /artifacts
+  volumes:
+    - artifacts:/artifacts
+  depends_on:
+    postgres:
+      condition: service_healthy
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-modelmedic}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-modelmedic}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    <<: *backend
+    ports:
+      - 127.0.0.1:${API_PORT:-8000}:8000
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+  worker:
+    <<: *backend
+    command: [python, -m, backend.app.jobs.worker]
+  frontend:
+    build: ./frontend
+    ports:
+      - 127.0.0.1:${FRONTEND_PORT:-5173}:5173
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  artifacts:

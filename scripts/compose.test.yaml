@@ -1,0 +1,12 @@
+# Optional override: the same backend with test dependencies, no extra services.
+services:
+  api:
+    build:
+      target: test
+    image: modelmedic-backend:test
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-modelmedic}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-modelmedic}
+  worker:
+    build:
+      target: test
+    image: modelmedic-backend:test
