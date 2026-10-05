@@ -33,6 +33,7 @@ from backend.app.science.baseline import fingerprint
 from backend.app.science.labeled import analyze_mode_b
 from backend.app.science.monitoring import METHODOLOGY_VERSION, analyze_mode_a
 from backend.app.services.queue import Queue
+from backend.app.services.report_store import save_report
 from backend.app.storage.base import ArtifactStore
 
 
@@ -325,6 +326,7 @@ def analysis_result(
         )
         current.analyzed_at = session.scalar(select(func.now()))
         current.state = "ANALYZED"
+        save_report(session, current, settings.code_version)
         project = session.get(Project, current.project_id)
         assert project
         project.state = "MONITORING"

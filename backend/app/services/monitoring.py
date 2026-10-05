@@ -2,10 +2,10 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.db.models import Dataset, Job, MonitoringRun
+from backend.app.db.models import Dataset, Job, MonitoringRun, SliceAnalysis
 
 
 def get_run(session: Session, run_id: UUID, lock: bool = False) -> MonitoringRun:
@@ -19,8 +19,11 @@ def get_run(session: Session, run_id: UUID, lock: bool = False) -> MonitoringRun
 def active_job(session: Session, run: MonitoringRun) -> Job | None:
     return session.scalar(
         select(Job).where(
-            Job.target_type == "RUN",
-            Job.target_id == run.id,
+            or_(
+                (Job.target_type == "RUN") & (Job.target_id == run.id),
+                (Job.target_type == "SLICE")
+                & Job.target_id.in_(select(SliceAnalysis.id).where(SliceAnalysis.run_id == run.id)),
+            ),
             Job.state.in_(["QUEUED", "RUNNING"]),
         )
     )

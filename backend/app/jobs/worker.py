@@ -11,6 +11,7 @@ from backend.app.domain.jobs import OwnershipLost
 from backend.app.jobs.datasets import validation_result
 from backend.app.jobs.monitoring import analysis_result
 from backend.app.jobs.monitoring import validation_result as current_validation
+from backend.app.jobs.slices import slice_result
 from backend.app.jobs.training import training_result
 from backend.app.services.queue import Queue
 from backend.app.storage.base import ArtifactStore
@@ -65,6 +66,8 @@ def run_once(
             result, training_prefix, failed = training_result(queue, job, store, settings)
         elif job.job_type == "MONITORING_ANALYZE" and store and settings:
             result, training_prefix, failed = analysis_result(queue, job, store, settings)
+        elif job.job_type == "SLICE_ANALYZE" and store and settings:
+            result, failed = slice_result(queue, job, store, settings)
         else:
             execute_dummy(job)
     except Exception:

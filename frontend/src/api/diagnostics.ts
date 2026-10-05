@@ -1,0 +1,9 @@
+export type Metric = { value: number | null; reason: string | null; note?: string | null }
+export type SliceRow = { slice_key: string; slice_value: string | null; is_overall: boolean; row_count: number; class_support: Record<string, number>; metrics: Record<string, Metric>; status: string; reason: string | null }
+export type SliceAnalysis = { id: string; feature_id: string; feature_name: string; methodology_version: string; code_version: string | null; status: string; published_at: string | null; limitation: string | null; rows: SliceRow[]; job: { state: string; stage: string; error_message: string | null } | null }
+export type SlicesData = { status: string; reason?: string; limitation: string; eligible_features: { feature_id: string; name: string }[]; analyses: SliceAnalysis[] }
+export type TrendPoint = { run_id: string; name: string; monitoring_date: string; mode: string | null; value: number | null; n: number | null; status: string; reason: string | null; adjusted_p: number | null }
+export type TrendsData = { group: string; signal: string; options: Record<string, string[]>; features: { feature_id: string; name: string; type: string }[]; class_order: string[]; points: TrendPoint[]; reference: { label: string; value: number | null; n: number | null; status: string; reason: string | null } | null; warning: string | null; limitation: string }
+export type ReportTable = { caption: string; columns: string[]; rows: unknown[][] }
+export type ReportFinding = { measured: string; result: string; evidence: string; may_conclude: string; cannot_conclude: string }
+export type ReportData = { report: { report_template_version: string; methodology_version: string; code_version: string; source_code_version: string; generated_at: string; sections: { key: string; title: string; paragraphs: string[]; tables: ReportTable[]; findings: ReportFinding[] }[]; footer: string }; slice_analyses: SliceAnalysis[] }

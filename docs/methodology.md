@@ -200,7 +200,7 @@ Fixed Mode A result templates state: Actual current predictive performance and
 calibration cannot be measured because ground-truth labels were not provided.
 Confidence change does not prove accuracy or calibration changed. No current
 outcome metrics, calibration, errors, slices, severity or retraining instructions
-are produced. Full deterministic report export remains the planned M5 work.
+are produced. M5 adds the fixed stored report described below.
 
 ## M4 labeled comparisons
 
@@ -267,3 +267,59 @@ deterministic pair-ID tie-break. Error examples persist only canonical row IDs,
 bounded to the first 50 per view. API retrieval reads hash-verified Parquet and
 only included model feature columns; excluded columns and target never appear in
 examples. Displayed cells are escaped text.
+
+## M5 diagnostic and historical interpretation
+
+Feature detail presents the unchanged saved raw distribution and missingness
+signals separately, with baseline/current n, test/statistic, distance, raw and
+adjusted p, BH family size, warnings, pooling membership, categories/range and
+baseline raw-feature permutation reliance. The data reference remains all valid
+baseline rows; model behaviour and reliance retain the held-out reference.
+
+> ModelMedic does not claim this feature change caused any change in performance.
+
+Reliance × change displays separate drift evidence, missingness information and
+baseline reliance. Sorting by reliance does not create a composite score or
+severity ranking. Negative reliance remains visible with the reviewed explanation.
+
+Slices partition complete Mode B labels by an included frozen categorical model
+feature. Raw spellings remain distinct; null is a separate group, not the literal
+string `null`. All rows is a current-run reference. Each group stores n and frozen
+class support. At n <30 no metrics are calculated:
+
+> Insufficient sample size for stable slice analysis.
+
+At n ≥30 the existing V1 labeled metric definitions and absent-class availability
+rules apply in the full frozen class space. Current availability reasons are not
+borrowed from an unavailable baseline metric. A one-metric dot plot omits
+insufficient groups, while their table rows and reasons remain. Category order is
+deterministic, never worst-performance order. The persistent limitation is:
+
+> Slice comparisons are exploratory. ModelMedic does not perform significance testing or multiplicity correction across slices. Apparent differences may reflect sampling variation. This is not a fairness audit.
+
+Trends select one saved scalar at a time: supported target-specific performance,
+Brier/Log Loss, mean/median confidence, selected predicted-class share, selected
+numeric KS/categorical JS distance, or missing percentage. Runs sort by Monitoring
+Date, Creation Timestamp and Run ID. Mode A outcome values remain null with the
+label reason. Charts use discrete markers without fitted lines or interpolation.
+Baseline performance uses the frozen held-out metrics; behaviour uses the saved
+held-out reference; missingness uses all baseline rows. KS/JS have no invented
+baseline self-comparison. Different stored methodology versions show a caution;
+historical values are not recalculated.
+
+Reports use fixed `report-v1` reviewed templates over saved facts in the exact 12
+locked sections. Findings distinguish Measured, Result, Evidence, May conclude and
+Cannot conclude. Mode A outcome sections remain present with their reason. The
+stored template/version/timestamp prevents later template edits from silently
+changing historical payloads. Separate later slices do not rewrite that payload.
+No full error-example rows are copied. Print output uses one column, monochrome
+tables/record alternatives and hidden navigation; PDF saving is browser print.
+
+All reports retain the nine mandatory limitations: drift does not prove predictive
+degradation; actual performance/calibration requires labels; significance is not
+practical importance; permutation reliance is not causality; small samples may be
+unstable; deltas have no uncertainty intervals; slices are exploratory; ModelMedic
+does not establish causality; NOT DETECTED does not prove equality or stability.
+The static Methodology page and searchable glossary mirror the locked V1 methods.
+No health score, forecast, causal verdict, automatic retraining or model update is
+introduced.

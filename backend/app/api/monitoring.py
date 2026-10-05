@@ -7,16 +7,17 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from backend.app.core.config import Settings
-from backend.app.db.models import BaselineSnapshot, Dataset, Job, MonitoringRun
+from backend.app.db.models import BaselineSnapshot, Dataset, Job, MonitoringRun, SliceAnalysis
 from backend.app.science.monitoring import MODE_A_LIMITATION
 from backend.app.services.examples import error_examples
 from backend.app.services.monitoring import active_job, get_run, mutable_run, run_view
 from backend.app.services.projects import get_project
+from backend.app.services.reporting import diagnostic
 from backend.app.storage.base import ArtifactStore
 
 
@@ -211,7 +212,10 @@ def monitoring_router(
             )
             if not found:
                 raise HTTPException(404, "Frozen feature not found.")
-            return dict(found)
+            return {
+                **found,
+                "interpretation": diagnostic(found, results(session, run_id)["data_reference"]),
+            }
 
     @router.get("/runs/{run_id}/predictions")
     def predictions(run_id: UUID) -> dict[str, Any]:
@@ -261,17 +265,6 @@ def monitoring_router(
                 return {"status": "UNAVAILABLE", "reason": MODE_A_LIMITATION}
             return error_examples(session, get_run(session, run_id), store, view)
 
-    @router.get("/runs/{run_id}/slices")
-    def unavailable(run_id: UUID) -> dict[str, Any]:
-        with sessions() as session:
-            data = results(session, run_id)
-            return {
-                "status": "UNAVAILABLE",
-                "reason": MODE_A_LIMITATION
-                if data["mode"] == "A"
-                else "Slice analysis is not available in this milestone.",
-            }
-
     @router.delete("/runs/{run_id}", status_code=204)
     def delete(run_id: UUID) -> None:
         with sessions.begin() as session:
@@ -296,7 +289,15 @@ def monitoring_router(
                 )
             )
             for job in session.scalars(
-                select(Job).where(Job.target_type == "RUN", Job.target_id == run_id)
+                select(Job).where(
+                    or_(
+                        (Job.target_type == "RUN") & (Job.target_id == run_id),
+                        (Job.target_type == "SLICE")
+                        & Job.target_id.in_(
+                            select(SliceAnalysis.id).where(SliceAnalysis.run_id == run_id)
+                        ),
+                    )
+                )
             ):
                 session.delete(job)
             session.delete(run)

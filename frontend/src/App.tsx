@@ -4,13 +4,7 @@ import { Projects, CreateProject } from './Projects'
 import { Setup } from './Setup'
 import { MonitoringWorkspace, NewRun, ProjectMonitoring } from './Monitoring'
 
-function Methodology() {
-  return <div className="prose"><p className="eyebrow">Reference</p><h1>Methodology</h1>
-    <p className="lead">Evidence, not manufactured certainty.</p>
-    <p>The methodology and glossary page will be added in a later milestone. The locked product and architecture specifications in the repository remain the source of truth.</p>
-    <p>ModelMedic distinguishes changes in data, predictions, confidence and measured performance. Actual predictive performance requires ground-truth labels.</p>
-    <Link to="/projects">Back to Projects</Link></div>
-}
+import { Methodology } from './Methodology'
 
 export function App() {
   const location = useLocation()

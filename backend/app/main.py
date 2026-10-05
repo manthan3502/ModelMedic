@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+from backend.app.api.diagnostics import diagnostics_router
 from backend.app.api.monitoring import monitoring_router
 from backend.app.api.projects import project_router
 from backend.app.core.config import Settings
@@ -77,6 +78,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         return error(request, 422, "INVALID_REQUEST", "Check the request format and identifiers.")
+
+    app.include_router(diagnostics_router(sessions, settings))
 
     @app.get("/api/v1/health/live")
     def live() -> dict[str, str]:

@@ -75,7 +75,7 @@ describe('M3 Mode A', () => {
 
 
 it('opens the dedicated Feature Detail route rather than run Overview', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (path: string) => ({ ok: true, status: 200, json: async () => path.endsWith('/summary') ? data : { ...run, state: 'ANALYZED', name: 'Current run', monitoring_date: '2026-10-04', baseline_snapshot_id: 's' } })))
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async (path: string) => ({ ok: true, status: 200, json: async () => path.endsWith('/summary') ? data : path.endsWith('/features/f000') ? feature : { ...run, state: 'ANALYZED', name: 'Current run', monitoring_date: '2026-10-04', baseline_snapshot_id: 's' } })))
   render(<QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={['/runs/r/features/f000']}><Routes><Route path="/runs/:runId/features/:featureId" element={<MonitoringWorkspace />} /></Routes></MemoryRouter></QueryClientProvider>)
   expect(await screen.findByRole('heading', { name: 'amount' })).toBeVisible()
   expect(screen.queryByRole('heading', { name: 'Run Overview' })).not.toBeInTheDocument()

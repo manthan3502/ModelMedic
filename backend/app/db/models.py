@@ -2,7 +2,17 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -181,6 +191,48 @@ class RunErrorResult(Base):
         ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
     )
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB)
+
+
+class SliceAnalysis(Identity, Base):
+    __tablename__ = "slice_analyses"
+    __table_args__ = (
+        UniqueConstraint("run_id", "feature_id", "methodology_version", name="uq_slice_analysis"),
+    )
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("monitoring_runs.id", ondelete="CASCADE"))
+    feature_id: Mapped[str] = mapped_column(String(16))
+    feature_name: Mapped[str]
+    methodology_version: Mapped[str] = mapped_column(String(32))
+    code_version: Mapped[str | None] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(16), server_default="PENDING")
+    limitation: Mapped[str | None]
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SliceResult(Base):
+    __tablename__ = "slice_results"
+    slice_analysis_id: Mapped[UUID] = mapped_column(
+        ForeignKey("slice_analyses.id", ondelete="CASCADE"), primary_key=True
+    )
+    slice_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    slice_value: Mapped[str | None]
+    is_overall: Mapped[bool]
+    row_count: Mapped[int]
+    class_support: Mapped[dict[str, int]] = mapped_column(JSONB)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(32))
+    reason: Mapped[str | None]
+
+
+class RunReport(Base):
+    __tablename__ = "run_reports"
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitoring_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    report_template_version: Mapped[str] = mapped_column(String(32))
+    methodology_version: Mapped[str] = mapped_column(String(32))
+    code_version: Mapped[str] = mapped_column(String(40))
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
 class Job(Identity, Base):

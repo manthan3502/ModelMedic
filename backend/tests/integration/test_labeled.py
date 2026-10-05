@@ -15,6 +15,7 @@ from backend.app.db.models import (
     RunCalibrationResult,
     RunErrorResult,
     RunMetric,
+    RunReport,
 )
 from backend.app.domain.jobs import OwnershipLost
 from backend.app.jobs.monitoring import analysis_result
@@ -101,7 +102,7 @@ def test_mode_b_complete_atomic_lifecycle_privacy_and_immutability(setup_client,
     assert client.get(f"/api/v1/runs/{run_id}/metrics").json() == result["performance"]
     assert client.get(f"/api/v1/runs/{run_id}/calibration").json() == result["calibration"]
     assert client.get(f"/api/v1/runs/{run_id}/errors").json() == result["errors"]
-    assert client.get(f"/api/v1/runs/{run_id}/slices").json()["status"] == "UNAVAILABLE"
+    assert client.get(f"/api/v1/runs/{run_id}/slices").json()["status"] == "AVAILABLE"
     assert len(result["performance"]["absent_classes"]) == (classes - 1 if absent else 0)
     assert "uncertainty intervals" in result["performance"]["limitation"]
     view = "fp" if classes == 2 else result["errors"]["current"]["common_pairs"][0]["view"]
@@ -162,7 +163,7 @@ def test_mode_b_fenced_finalization_rolls_back_every_labeled_table(setup_client)
         queue.finalize(job, result=publish)
     with queue.sessions() as session:
         assert session.get(MonitoringRun, UUID(run_id)).results is None
-        for cls in (RunMetric, RunCalibrationResult, RunErrorResult):
+        for cls in (RunMetric, RunCalibrationResult, RunErrorResult, RunReport):
             assert session.scalar(select(cls)) is None
     store.delete_prefix(prefix)
 

@@ -113,4 +113,37 @@ schema version, projects only included model features plus internal row ID, then
 retrieves the saved row references. Arbitrary views/paths are rejected. Empty
 views use typed Arrow indices and return an empty table. React escapes cells.
 Mode A keeps the original unavailable contracts. Slices, trends and report
-generation are not implemented by M4.
+generation were not implemented by M4.
+
+## M5 derived diagnostics and reports
+
+Revision `0006_m5` adds only `slice_analyses`, `slice_results` and `run_reports`.
+Scalar bindings, sample size, status, timestamps and versions are normal columns;
+nested class supports and metric availability maps use JSONB as specified in
+locked Architecture §27. Structured immutable report documents also use JSONB.
+Trends select persisted run facts; no duplicate trend dataset is created.
+
+`SLICE_ANALYZE` uses the same PostgreSQL claim, lease, heartbeat and fencing
+transaction as other jobs. Requests lock the core run and are unique on
+`(run_id, feature_id, methodology_version)`. Repeats return the existing analysis,
+including pending/failed states, without creating another job. Frozen artifact
+hashes, canonical schema, environment, snapshot/configuration/class/type metadata
+and saved overall metrics are checked before publication. Only inference occurs.
+Slice rows are committed together before sealing READY. Database triggers reject
+published changes and late inserts. Active slice jobs block run deletion; exact
+run deletion cascades derived rows and removes its associated slice-job metadata.
+Raw category display order uses explicit PostgreSQL C collation, independent of
+the server locale; missing and All rows use distinct internal keys.
+
+Core monitoring analysis finalization saves the report in its existing fenced
+transaction. Pre-M5 analyzed runs can receive their first report on request using
+only saved facts; subsequent reads always return the stored payload. Template,
+methodology, source/generated code versions and generation timestamp are retained.
+Database triggers reject report updates. Completed slices remain separate,
+versioned additive sections when viewing the report; the core payload is unchanged.
+
+The API performs no scientific calculation or model loading. It selects stored
+trend signals and uses fixed interpretation templates for feature detail. React
+renders escaped text, chart/table alternatives and browser print CSS. No model
+service, LLM, server PDF engine, new external dependency or deployment is added.
+Existing Demo Mode guards remain compatibility boundaries; M6 is not implemented.

@@ -16,8 +16,8 @@ from scripts.smoke_m2 import wait
 from scripts.smoke_m3 import run_call, wait_run
 
 
-def establish(classes):
-    p = call(method="POST", body={"name": "M4 synthetic acceptance"})
+def establish(classes, name="M4 synthetic acceptance"):
+    p = call(method="POST", body={"name": name})
     project_id = p["id"]
     path = "/" + project_id
     content = (
@@ -133,7 +133,7 @@ def main():
                 examples = run_call(f"/runs/{run_id}/errors/examples?view={view}")
                 assert examples["features"] == ["amount", "segment"] and len(examples["rows"]) <= 50
                 assert "synthetic-secret" not in json.dumps(examples)
-                assert run_call(f"/runs/{run_id}/slices")["status"] == "UNAVAILABLE"
+                assert run_call(f"/runs/{run_id}/slices")["status"] == "AVAILABLE"
                 with sessions() as session:
                     stored = session.get(MonitoringRun, UUID(run_id))
                     assert json.loads(store.get(stored.result_object_key)) == results

@@ -190,3 +190,25 @@ th small { display: block; font-weight: normal; }
 .confusion-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .reliability circle:focus { outline: 2px solid #26736f; outline-offset: 3px; }
 @media (max-width: 1023px) { .confusion-comparison { grid-template-columns: 1fr; } }
+/* M5 diagnostics retain direct labels and table alternatives at every width. */
+.trend-chart, .slice-plot { width: 100%; height: auto; margin-block: 1.25rem; }
+.trend-chart text, .slice-plot text { fill: var(--ink, #243039); font-family: inherit; }
+.methodology nav, .report-controls nav { display: flex; flex-wrap: wrap; gap: .65rem 1rem; margin-block: 1rem; }
+.methodology section, .reliability-report section { scroll-margin-top: 2rem; }
+.methodology dl div { margin-block: 1rem; }
+.methodology dt, .report-evidence dt { font-weight: 650; }
+.methodology dd, .report-evidence dd { margin: .25rem 0 0; }
+.run-layout:has(.reliability-report) { grid-template-columns: 1fr; }
+.run-layout:has(.reliability-report) .run-navigation nav { display: flex; flex-wrap: wrap; }
+.run-layout:has(.reliability-report) .run-navigation .eyebrow { display: none; }
+.reliability-report { max-width: 72rem; margin-inline: auto; }
+.reliability-report section { margin-block: 2rem; }
+.report-evidence { border-left: 2px solid #79858e; padding-left: 1rem; }
+.report-evidence div { margin-block: .75rem; }
+.reliability-report p, .reliability-report dd, .reliability-report th, .reliability-report td { overflow-wrap: anywhere; }
+.reliability-report footer { border-top: 1px solid #79858e; padding-top: 1rem; }
+.print-table-alternative { display: none; }
+.plot-scroll { overflow-x: auto; max-width: 100%; margin-block: 1rem; }
+.plot-scroll svg { min-width: 640px; display: block; }
+.print-preview-toolbar { padding: .75rem; border: 1px solid #79858e; margin-bottom: 1rem; }
+:where(a, button, input, select, summary) { scroll-margin-top: 100px; }

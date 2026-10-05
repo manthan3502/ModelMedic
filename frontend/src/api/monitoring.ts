@@ -8,7 +8,7 @@ export type Histogram = { bins: { lower: number | null; upper: number | null; ba
 export type Category = { category: string; baseline_count: number; current_count: number; baseline_share: number; current_share: number; delta_pp: number }
 export type Distribution = Signal & { plot?: Histogram; categories?: Category[]; baseline_min?: number | null; baseline_max?: number | null; outside_range_share?: number | null; new_categories?: string[]; disappeared_categories?: string[]; pooling_threshold?: number | null; pooling?: { id: string; label: string; members: string[] }[]; expected_counts?: number[][] }
 export type Missingness = Signal & { baseline_missing_count: number; current_missing_count: number; baseline_missing_percent: number; current_missing_percent: number; delta_pp: number }
-export type FeatureResult = { feature_id: string; name: string; type: string; distribution: Distribution; missingness: Missingness; reliance: { feature: string; mean: number; sd: number } | null }
+export type FeatureResult = { feature_id: string; name: string; type: string; distribution: Distribution; missingness: Missingness; reliance: { feature: string; mean: number; sd: number } | null; interpretation?: { measured: string; result: string; may_conclude: string; cannot_conclude: string; reliance: string } }
 export type Validation = { errors: string[]; warnings: string[]; mode?: string; required_features?: string[]; ignored_extra_columns?: string[]; coercions?: { feature_id: string; name: string; observed_count: number; conversion: string }[]; new_categories?: { feature_id: string; name: string; categories: string[] }[] }
 export type Run = {
   id: string; project_id: string; name: string; monitoring_date: string; notes: string | null
