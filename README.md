@@ -306,3 +306,11 @@ The preparation command refuses to overwrite an existing verification state.
 Cleanup checks the stored exact project ID and synthetic name, and removes only
 that fixture’s runs, derived records and private project prefix. No real data is
 used. M6 Demo Mode/public deployment work is not included.
+
+## M6 · UI integration and read-only demo
+
+The Clinical Reliability Lab UI now uses shared scientific statuses, evidence
+frames, table behavior, responsive run navigation and server-derived Demo Mode.
+See [Demo Mode and real-pipeline seeding](docs/demo-mode.md) for the reproducible
+seed, explicitly scoped read-only topology, verification and regeneration commands.
+M7 CI/hosting/deployment hardening is outside this milestone.

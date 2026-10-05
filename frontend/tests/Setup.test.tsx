@@ -25,7 +25,7 @@ function setup(route: string, initial = fixture()) {
       project = { ...project, configuration: JSON.parse(init.body as string), preprocessing: { steps: ['Raw columns', 'Handle missing values', 'Encode categories', 'Scale numeric values when required', 'Classifier'], numeric: 'Median imputation. StandardScaler for Logistic Regression only.', categorical: 'Explicit missing category and one-hot encoding.', learning: 'Learned from the Development 80% only.', frozen: 'Frozen after baseline establishment.', fitted: false }, confirmation: null }
       if (project.configuration.classifier) project.confirmation = { ready: true, training_available: true, split: 'Stratified 80/20', cv: '5-fold Development CV', seed: 42, guardrail: 'Actual held-out support must be at least 20 rows per class.' }
     }
-    return { ok: true, status: 200, json: async () => structuredClone(url === '/api/v1/projects' && !init ? [project] : url.endsWith('/health/ready') ? { status: 'ready' } : project) }
+    return { ok: true, status: 200, json: async () => structuredClone(url.endsWith('/runtime') ? { deployment_mode: 'FULL_MODE', read_only: false } : url === '/api/v1/projects' && !init ? [project] : url.endsWith('/health/ready') ? { status: 'ready' } : project) }
   })
   vi.stubGlobal('fetch', fetchMock)
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[route]}><App /></MemoryRouter></QueryClientProvider>)
@@ -36,6 +36,7 @@ describe('M1 baseline setup', () => {
   it('creates, uploads, reviews and reaches confirmation without training', async () => {
     const fetchMock = setup('/projects/new')
     const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeEnabled())
     await user.type(screen.getByLabelText('Name'), 'Synthetic project')
     await user.click(screen.getByRole('button', { name: 'Create project and upload baseline' }))
     await screen.findByRole('heading', { name: 'Upload Baseline CSV' })
@@ -91,6 +92,7 @@ describe('M1 baseline setup', () => {
   it('displays backend configuration errors without advancing', async () => {
     setup('/projects/project1/setup/features')
     const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByLabelText('Target')).toBeEnabled())
     await user.selectOptions(await screen.findByLabelText('Target'), 'f002')
     await user.selectOptions(screen.getByLabelText('Binary positive class (required)'), 'yes')
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Encoded-column estimate exceeds limit.' }), { status: 422 }))

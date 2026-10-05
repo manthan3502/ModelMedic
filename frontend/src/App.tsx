@@ -5,6 +5,7 @@ import { Setup } from './Setup'
 import { MonitoringWorkspace, NewRun, ProjectMonitoring } from './Monitoring'
 
 import { Methodology } from './Methodology'
+import { DemoBadge, RuntimeProvider, NotFound } from './Workspace'
 
 export function App() {
   const location = useLocation()
@@ -20,10 +21,12 @@ export function App() {
     setMenuOpen(false)
   }, [location.pathname])
 
-  return <>
+  return <RuntimeProvider>
+    <>
     <a className="skip-link" href="#main-content">Skip to content</a>
     <header className="topbar"><div className="topbar-inner">
       <Link className="brand" to="/projects">ModelMedic<span className="brand-rule" aria-hidden="true" /></Link>
+      <DemoBadge />
       <button className="menu-toggle secondary" aria-expanded={menuOpen} aria-controls="global-nav"
         onClick={() => setMenuOpen(!menuOpen)}>Menu</button>
       <nav id="global-nav" aria-label="Main navigation" className={menuOpen ? 'open' : ''}>
@@ -41,8 +44,8 @@ export function App() {
         <Route path="/runs/:runId/:section" element={<MonitoringWorkspace />} />
         <Route path="/runs/:runId/features/:featureId" element={<MonitoringWorkspace />} />
         <Route path="/methodology" element={<Methodology />} />
-        <Route path="*" element={<div className="prose"><h1>Page not found</h1><p>This address is not part of the workspace.</p><Link to="/projects">Back to Projects</Link></div>} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </main>
-  </>
+  </></RuntimeProvider>
 }

@@ -41,11 +41,14 @@ export const models: { value: Classifier; name: string; description: string; tra
   { value: 'random_forest', name: 'Random Forest', description: 'Non-linear ensemble of trees.', tradeoff: 'Captures interactions, but is less directly interpretable than a linear model.' },
   { value: 'gradient_boosting', name: 'Gradient Boosting', description: 'Sequential boosted trees.', tradeoff: 'Captures non-linear patterns, but fitting can take longer.' },
 ]
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public code: string, public requestId?: string) { super(message); this.name = "ApiError" }
+}
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, init)
   if (response.status === 204) return undefined as T
-  const body = await response.json()
-  if (!response.ok) throw new Error(typeof body.message === 'string' ? body.message : 'The request could not be completed.')
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new ApiError(typeof body.message === 'string' ? body.message : 'The request could not be completed.', response.status, body.code ?? 'REQUEST_ERROR', body.request_id ?? response.headers?.get('X-Request-ID') ?? undefined)
   return body as T
 }
 export const saveConfig = (id: string, configuration: Configuration, discardResults = false) => request<Project>(`/projects/${id}/configuration?discard_results=${discardResults}`, {

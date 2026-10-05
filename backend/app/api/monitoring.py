@@ -16,6 +16,7 @@ from backend.app.db.models import BaselineSnapshot, Dataset, Job, MonitoringRun,
 from backend.app.science.monitoring import MODE_A_LIMITATION
 from backend.app.services.examples import error_examples
 from backend.app.services.monitoring import active_job, get_run, mutable_run, run_view
+from backend.app.services.presentation import interpretations
 from backend.app.services.projects import get_project
 from backend.app.services.reporting import diagnostic
 from backend.app.storage.base import ArtifactStore
@@ -216,6 +217,11 @@ def monitoring_router(
                 **found,
                 "interpretation": diagnostic(found, results(session, run_id)["data_reference"]),
             }
+
+    @router.get("/runs/{run_id}/presentation")
+    def presentation(run_id: UUID) -> dict[str, dict[str, str]]:
+        with sessions() as session:
+            return interpretations(results(session, run_id))
 
     @router.get("/runs/{run_id}/predictions")
     def predictions(run_id: UUID) -> dict[str, Any]:

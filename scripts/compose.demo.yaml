@@ -1,0 +1,11 @@
+# Apply only after the real-pipeline seed has completed in Full Mode.
+# Stop the existing Full Mode worker before starting this read-only topology.
+services:
+  api:
+    environment:
+      MM_ENVIRONMENT: deployment
+      MM_DEPLOYMENT_MODE: demo
+    volumes:
+      - artifacts:/artifacts:ro
+  worker:
+    profiles: [full]

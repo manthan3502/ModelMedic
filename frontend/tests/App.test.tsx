@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { App } from '../src/App'
 
 function setup(route = '/projects', offline = false) {
-  const fetchMock = vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.endsWith('/projects') ? [] : ({ status: 'ready' }) }))
+  const fetchMock = vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url.endsWith('/runtime') ? { deployment_mode: 'FULL_MODE', read_only: false } : url.endsWith('/projects') ? [] : ({ status: 'ready' }) }))
   if (offline) fetchMock.mockRejectedValue(new Error('offline'))
   vi.stubGlobal('fetch', fetchMock)
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -19,7 +19,7 @@ describe('M0 shell', () => {
     setup('/')
     expect(await screen.findByRole('heading', { name: 'Projects', level: 1 })).toBeVisible()
     expect(screen.getByRole('link', { name: 'ModelMedic' })).toBeVisible()
-    expect(screen.getByRole('link', { name: 'New project' })).toHaveAttribute('href', '/projects/new')
+    expect(await screen.findByRole('link', { name: 'New project' })).toHaveAttribute('href', '/projects/new')
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/health/ready'))
   })
   it('navigates with accessible links and restores reading context', async () => {

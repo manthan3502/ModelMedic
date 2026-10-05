@@ -1,7 +1,8 @@
+import { MutationGate, SyntheticLabel, ErrorState } from './Workspace'
 import { useState } from 'react'
 import { BaselineResultsView, Establish, TrainAction, DiscardReview } from './Training'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { models, request, saveConfig, type Classifier, type FeatureType, type Project, type Weighting } from './api/projects'
 
 const steps = [ ['upload', 'Upload'], ['profile', 'Review data'], ['features', 'Target & features'], ['preprocessing', 'Preprocessing'], ['model', 'Model'], ['confirm', 'Confirm & train'], ['results', 'Baseline results'], ['establish', 'Establish baseline'] ]
@@ -11,7 +12,7 @@ export function Setup() {
   const { id = '', step = 'upload' } = useParams()
   const query = useQuery({ queryKey: ['project', id], queryFn: () => request<Project>(`/projects/${id}`), refetchInterval: q => ['QUEUED', 'RUNNING'].includes(q.state.data?.job?.state ?? '') ? 1000 : false })
   if (query.isPending) return <p role="status">Loading project…</p>
-  if (query.isError) return <div className="notice error" role="alert"><h1>Project unavailable</h1><p>{query.error.message}</p><button onClick={() => void query.refetch()}>Retry</button></div>
+  if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()} />
   const p = query.data
   const ready = p.dataset?.status === 'READY'
   const configured = Boolean(p.configuration.target_id)
@@ -21,14 +22,18 @@ export function Setup() {
     if (p.state !== 'DRAFT') return false
     return steps.some(([known]) => known === slug) && (slug === 'upload' || ready && (['profile', 'features'].includes(slug) || configured && (slug !== 'confirm' || Boolean(p.confirmation))))
   }
-  return <><div className="page-heading"><div><p className="eyebrow">Baseline setup · {p.state}</p><h1>{p.name}</h1><p>{p.description}</p></div><div>{p.baseline?.status === "ESTABLISHED" && <Link className="button" to={`/projects/${id}/overview`}>Open project</Link>} <Link to="/projects">All projects</Link></div></div>
-    <div className="setup-layout"><aside className="stepper" aria-label="Baseline setup steps"><ol>{steps.map(([slug, title], i) => <li key={slug}>
-      {available(slug) ? <Link to={`/projects/${id}/setup/${slug}`} aria-current={step === slug ? 'step' : undefined}><span className="mono">{i + 1}</span> {title} <small>{step === slug ? 'Current' : completed[slug] ? 'Complete' : 'Not started'}</small></Link>
-        : <span><span className="mono">{i + 1}</span> {title}<small>{completed[slug] ? "Complete" : "Not started"}</small></span>}</li>)}</ol></aside>
-      <div className="setup-content">{p.deletion_pending ? <div className="notice error" role="alert">Project deletion needs attention. Retry deletion from Upload.</div> : null}
+  const attention = (slug: string) => p.deletion_pending || slug === 'upload' && (p.dataset?.status === 'VALIDATION_FAILED' || p.job?.job_type === 'DATASET_VALIDATE' && p.job.state === 'FAILED') || slug === 'confirm' && p.job?.job_type === 'BASELINE_TRAIN' && p.job.state === 'FAILED'
+  const state = (slug: string) => attention(slug) ? 'Needs attention' : step === slug ? 'Current' : completed[slug] ? 'Complete' : 'Not started'
+  const icon = (slug: string) => ({ 'Needs attention': '△', Current: '●', Complete: '✓', 'Not started': '○' })[state(slug)]
+  return <><div className="page-heading"><div><p className="eyebrow">Baseline setup · {p.state}</p><h1>{p.name}</h1><p>{p.description}</p><SyntheticLabel /></div><div>{p.baseline?.status === "ESTABLISHED" && <Link className="button" to={`/projects/${id}/overview`}>Open project</Link>} <Link to="/projects">All projects</Link></div></div>
+    {p.state !== 'DRAFT' && <nav className="result-tabs" aria-label="Project navigation"><NavLink to={`/projects/${id}/overview`}>Overview</NavLink><Link aria-current="page" to={`/projects/${id}/setup/results`}>Baseline</Link><NavLink to={`/projects/${id}/runs`}>Runs</NavLink><NavLink to={`/projects/${id}/trends`}>Trends</NavLink></nav>}
+    <div className={`setup-layout ${p.state !== 'DRAFT' ? 'established-layout' : ''}`}>{p.state === 'DRAFT' && <aside className="stepper" aria-label="Baseline setup steps"><ol>{steps.map(([slug, title], i) => <li key={slug}>{[0,2,5,7].includes(i) && <p className="eyebrow step-group">{i === 0 ? "Data" : i === 2 ? "Configure" : i === 5 ? "Train" : "Lock"}</p>}
+      {available(slug) ? <Link to={`/projects/${id}/setup/${slug}`} aria-current={step === slug ? 'step' : undefined}><span className="mono">{i + 1}</span> {title} <small>{icon(slug)} {state(slug)}</small></Link>
+        : <span><span className="mono">{i + 1}</span> {title}<small>{icon(slug)} {state(slug)}</small></span>}</li>)}</ol></aside>}
+      <div className="setup-content">{p.deletion_pending ? <div className="notice error" role="alert">Project deletion needs attention. Scientific outputs are unavailable while cleanup is pending. Retry deletion from Upload to finish cleanup.</div> : null}
         {!available(step) ? <div className="notice"><h2>{p.state !== "DRAFT" ? "Baseline is locked" : "Finish the preceding setup steps"}</h2><Link to={`/projects/${id}/setup/${p.state !== "DRAFT" ? "results" : "upload"}`}>{p.state !== "DRAFT" ? "Review frozen baseline" : "Go to Upload"}</Link></div>
-          : step === 'results' ? <BaselineResultsView p={p} /> : step === 'establish' ? <Establish p={p} /> : step === 'upload' ? <Upload p={p} /> : step === 'profile' ? <Profile p={p} /> : step === 'features' ? <Features key={p.dataset?.id} p={p} />
-            : step === 'preprocessing' ? <Preprocessing p={p} /> : step === 'model' ? <Model key={p.dataset?.id} p={p} /> : <Confirmation p={p} />}</div></div></>
+          : step === 'results' ? <BaselineResultsView p={p} /> : step === 'establish' ? <Establish p={p} /> : step === 'upload' ? <MutationGate><Upload p={p} /></MutationGate> : step === 'profile' ? <Profile p={p} /> : step === 'features' ? <MutationGate><Features key={p.dataset?.id} p={p} /></MutationGate>
+            : step === 'preprocessing' ? <Preprocessing p={p} /> : step === 'model' ? <MutationGate><Model key={p.dataset?.id} p={p} /></MutationGate> : <Confirmation p={p} />}</div></div></>
 }
 
 function Upload({ p }: { p: Project }) {
@@ -48,14 +53,14 @@ function Upload({ p }: { p: Project }) {
       <label htmlFor="baseline-file">Drop a CSV here or choose a file</label><input id="baseline-file" type="file" accept=".csv,text/csv" disabled={active || p.deletion_pending} onChange={e => setFile(e.target.files?.[0] ?? null)} /></div>
       {file && <p>{file.name} · {file.size.toLocaleString()} bytes</p>}{p.dataset && <p>Uploading again replaces the draft dataset selection and clears its configuration. Stored draft imports are removed when the project is deleted.</p>}
       <DiscardReview p={p} checked={discard} onChange={setDiscard} /><button disabled={Boolean(p.baseline?.results) && !discard || !file || active || upload.isPending || p.deletion_pending}>{upload.isPending ? 'Uploading…' : 'Upload and validate'}</button></form>
-    {upload.isError && <p className="notice error" role="alert">{upload.error.message}</p>}
+    {upload.isError && <ErrorState error={upload.error} />}
     {active && <p className="notice" role="status">Validating baseline: {p.job?.state === 'QUEUED' ? 'Waiting for worker' : stageLabels[p.job?.stage ?? ''] ?? 'Validation in progress'}.</p>}
-    {p.job?.state === 'FAILED' && <p className="notice error" role="alert">Validation job could not finish. {p.job.error_message} Re-upload the CSV to retry.</p>}
-    {p.dataset?.validation_report?.errors.length ? <div className="notice error" role="alert"><h3>Dataset needs attention</h3><ul>{p.dataset.validation_report.errors.map(e => <li key={e}>{e}</li>)}</ul></div> : null}
-    {p.dataset?.status === 'READY' && <div className="notice"><h3>Dataset validated</h3><p>Canonical Parquet and dataset profile are ready. No rows were deleted.</p><Link className="button" to={`/projects/${p.id}/setup/profile`}>Review dataset profile</Link></div>}
+    {p.job?.state === 'FAILED' && <ErrorState error={new Error(`Validation job could not finish. ${p.job.error_message ?? ""} Re-upload the CSV to retry.`)} />}
+    {p.dataset?.validation_report?.errors.length ? <div className="notice error" role="alert"><h3>Dataset needs attention</h3><p>The dataset has not been accepted for training. Correct the source CSV and upload it again; no rows are silently deleted.</p><ul>{p.dataset.validation_report.errors.map(e => <li key={e}>{e}</li>)}</ul></div> : null}
+    {p.dataset?.status === 'READY' && <div className="notice success"><h3>Dataset validated</h3><p>Canonical Parquet and dataset profile are ready. No rows were deleted.</p><Link className="button" to={`/projects/${p.id}/setup/profile`}>Review dataset profile</Link></div>}
     <div className="delete-draft"><button className="secondary" disabled={active || deletion.isPending} onClick={() => setConfirmDelete(true)}>Delete draft project</button>
       {confirmDelete && <div className="notice"><p>This removes the draft project and its stored datasets.</p><button onClick={() => deletion.mutate()} disabled={deletion.isPending}>Confirm deletion</button> <button className="secondary" onClick={() => setConfirmDelete(false)}>Keep project</button></div>}
-      {deletion.isError && <p role="alert">{deletion.error.message}</p>}</div></>
+      {deletion.isError && <ErrorState error={deletion.error} />}</div></>
 }
 
 function Profile({ p }: { p: Project }) {
@@ -64,15 +69,15 @@ function Profile({ p }: { p: Project }) {
     <dl className="summary-strip"><div><dt>Rows</dt><dd>{data.row_count.toLocaleString()}</dd></div><div><dt>Columns</dt><dd>{data.column_count}</dd></div><div><dt>Duplicate rows</dt><dd>{data.duplicate_rows}</dd></div><div><dt>Numeric / categorical</dt><dd>{data.columns.filter(c => c.inferred_type === 'numeric').length} / {data.columns.filter(c => c.inferred_type === 'categorical').length}</dd></div></dl>
     {data.duplicate_rows > 0 && <p className="notice">Duplicate rows are retained. Review the source to decide whether they represent repeated observations.</p>}
     <section className="notice" aria-label="Validation warnings"><h3>Review before configuring</h3><ul>{data.columns.filter(c => c.flags.length).map(c => <li key={c.feature_id}><b>{c.name}</b>: {c.flags.join(' ')}</li>)}</ul>{!data.columns.some(c => c.flags.length) && <p>No column warnings found.</p>}</section>
-    <div className="table-scroll"><table><caption>Column profile</caption><thead><tr><th>Feature</th><th>Inferred type</th><th>Missing</th><th>Distinct</th><th>Sample values</th><th>Flags</th><th>Target eligibility</th></tr></thead><tbody>{data.columns.map(c => <tr key={c.feature_id}><th scope="row">{c.name}</th><td>{c.inferred_type}</td><td>{percent(c.missing_count / data.row_count)}</td><td>{c.distinct_count}</td><td>{c.samples.join(' · ')}</td><td>{c.flags.join(' ') || 'None'}</td><td>{c.target.eligible ? 'Eligible' : c.target.reasons.join(' ')}</td></tr>)}</tbody></table></div>
-    <div className="table-scroll"><table><caption>First 10 rows · missing cells shown as —</caption><thead><tr>{data.columns.map(c => <th key={c.feature_id}>{c.name}</th>)}</tr></thead><tbody>{data.preview.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v ?? '—'}</td>)}</tr>)}</tbody></table></div>
+    <div className="table-scroll"><table><caption>Column profile</caption><thead><tr><th scope="col">Feature</th><th scope="col">Inferred type</th><th scope="col">Missing</th><th scope="col">Distinct</th><th scope="col">Sample values</th><th scope="col">Flags</th><th scope="col">Target eligibility</th></tr></thead><tbody>{data.columns.map(c => <tr key={c.feature_id}><th scope="row">{c.name}</th><td>{c.inferred_type}</td><td className="numeric">{percent(c.missing_count / data.row_count)}</td><td className="numeric">{c.distinct_count}</td><td>{c.samples.join(' · ')}</td><td>{c.flags.join(' ') || 'None'}</td><td>{c.target.eligible ? 'Eligible' : c.target.reasons.join(' ')}</td></tr>)}</tbody></table></div>
+    <div className="table-scroll"><table><caption>First 10 rows · missing cells shown as —</caption><thead><tr>{data.columns.map(c => <th scope="col" key={c.feature_id}>{c.name}</th>)}</tr></thead><tbody>{data.preview.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{v ?? '—'}</td>)}</tr>)}</tbody></table></div>
     <p className="mono hash">{p.dataset!.canonical_schema_version} · SHA-256 {p.dataset!.canonical_sha256}</p><Link className="button" to={`/projects/${p.id}/setup/features`}>Select target and configure features</Link></>
 }
 
 function ClassCounts({ p, targetId }: { p: Project; targetId?: string }) {
   const target = p.dataset?.profile?.columns.find(c => c.feature_id === (targetId ?? p.configuration.target_id))?.target
   const counts = target?.classes ?? []
-  return <>{target?.class_balance_note && <p className="notice">{target.class_balance_note}</p>}<div className="table-scroll"><table><caption>Target class distribution</caption><thead><tr><th>Class</th><th>Rows</th><th>Proportion</th></tr></thead><tbody>{counts.map(c => <tr key={c.label}><th scope="row">{c.label}</th><td>{c.count}</td><td>{percent(c.proportion)}</td></tr>)}</tbody></table></div></>
+  return <>{target?.class_balance_note && <p className="notice">{target.class_balance_note}</p>}<div className="table-scroll"><table><caption>Target class distribution</caption><thead><tr><th scope="col">Class</th><th scope="col">Rows</th><th scope="col">Proportion</th></tr></thead><tbody>{counts.map(c => <tr key={c.label}><th scope="row">{c.label}</th><td className="numeric">{c.count}</td><td className="numeric">{percent(c.proportion)}</td></tr>)}</tbody></table></div></>
 }
 
 function Features({ p }: { p: Project }) {
@@ -92,12 +97,12 @@ function Features({ p }: { p: Project }) {
     <p>Choose the outcome you want to predict. Target eligibility and class support are shown in the dataset profile.</p>
     {target && <ClassCounts p={p} targetId={targetId} />}{positiveRequired && <><label htmlFor="positive">Binary positive class (required)</label><select id="positive" value={positive} required onChange={e => setPositive(e.target.value)}><option value="">Select positive class</option>{target.target.classes.map(c => <option key={c.label} value={c.label}>{c.label}</option>)}</select><p>Which outcome are you trying to catch? Precision, recall, F1 and false positives/negatives use this class as the event of interest.</p></>}
     <h3>Model inputs</h3><p>Unsupported features are excluded with a reason. Review identifiers and constants before choosing inputs.</p>
-    <div className="table-scroll"><table><thead><tr><th>Include</th><th>Feature</th><th>Type</th><th>Flags / reason</th></tr></thead><tbody>{columns.filter(c => c.feature_id !== targetId).map(c => {
+    <div className="table-scroll"><table><thead><tr><th scope="col">Include</th><th scope="col">Feature</th><th scope="col">Type</th><th scope="col">Flags / reason</th></tr></thead><tbody>{columns.filter(c => c.feature_id !== targetId).map(c => {
       const chosen = selected.find(f => f.feature_id === c.feature_id)
       return <tr key={c.feature_id}><td><input aria-label={`Include ${c.name}`} type="checkbox" disabled={!c.allowed_types.length} checked={Boolean(chosen)} onChange={e => setFeatures(e.target.checked ? [...features.filter(f => f.feature_id !== c.feature_id), { feature_id: c.feature_id, type: c.inferred_type }] : features.filter(f => f.feature_id !== c.feature_id))} /></td><th scope="row">{c.name}</th><td><select aria-label={`Type for ${c.name}`} disabled={!chosen || !c.allowed_types.length} value={chosen?.type ?? c.inferred_type} onChange={e => setFeatures(features.map(f => f.feature_id === c.feature_id ? { ...f, type: e.target.value as FeatureType } : f))}>{(c.allowed_types.length ? c.allowed_types : [c.inferred_type]).map(t => <option key={t} value={t}>{t === 'numeric' ? 'Numeric' : 'Categorical'}</option>)}</select></td><td>{c.flags.join(' ') || 'Supported'}</td></tr>
     })}</tbody></table></div>
     <div className="sticky-summary"><p>{selected.length} / {p.limits.max_features} included · {selected.filter(f => f.type === 'numeric').length} numeric · {selected.filter(f => f.type === 'categorical').length} categorical · ~{encoded} encoded columns / {p.limits.max_encoded_columns.toLocaleString()} computational limit (including categorical missing buckets)</p>
-      {save.isError && <p role="alert" className="notice error">{save.error.message}</p>}<DiscardReview p={p} checked={discard} onChange={setDiscard} /><button disabled={Boolean(p.baseline?.results) && !discard || !target || !selected.length || positiveRequired && !positive || save.isPending}>Review preprocessing</button></div></form></>
+      {save.isError && <ErrorState error={save.error} />}<DiscardReview p={p} checked={discard} onChange={setDiscard} /><button disabled={Boolean(p.baseline?.results) && !discard || !target || !selected.length || positiveRequired && !positive || save.isPending}>Review preprocessing</button></div></form></>
 }
 
 function Preprocessing({ p }: { p: Project }) {
@@ -114,7 +119,7 @@ function Model({ p }: { p: Project }) {
   const save = useMutation({ mutationFn: () => saveConfig(p.id, { dataset_id: p.dataset!.id, target_id: p.configuration.target_id!, positive_class: p.configuration.positive_class ?? null, features: p.configuration.features!, classifier: classifier as Classifier, weighting: weighting as Weighting }, discard), onSuccess: value => { client.setQueryData(['project', p.id], value); navigate(`/projects/${p.id}/setup/confirm`) } })
   return <><h2>Model & Weighting</h2><form onSubmit={e => { e.preventDefault(); save.mutate() }}><fieldset><legend>Classifier</legend><div className="model-options">{models.map(m => <label className="model-option" key={m.value}><span><input name="classifier" type="radio" value={m.value} checked={classifier === m.value} onChange={() => setClassifier(m.value)} required /> <b>{m.name}</b></span><p>{m.description}</p><p>{m.tradeoff}</p></label>)}</div></fieldset>
     <fieldset><legend>Class weighting</legend>{(['standard', 'balanced'] as const).map(w => <label className="radio-label" key={w}><input name="weighting" type="radio" checked={weighting === w} onChange={() => setWeighting(w)} required /> {w === 'standard' ? 'Standard' : 'Balanced'}</label>)}<p>Standard treats observations equally. Balanced accounts for class frequencies during fitting. No model is recommended from these counts.</p></fieldset><ClassCounts p={p} />
-    {save.isError && <p role="alert" className="notice error">{save.error.message}</p>}<DiscardReview p={p} checked={discard} onChange={setDiscard} /><button disabled={Boolean(p.baseline?.results) && !discard || !classifier || !weighting || save.isPending}>Review and train</button></form></>
+    {save.isError && <ErrorState error={save.error} />}<DiscardReview p={p} checked={discard} onChange={setDiscard} /><button disabled={Boolean(p.baseline?.results) && !discard || !classifier || !weighting || save.isPending}>Review and train</button></form></>
 }
 
 function Confirmation({ p }: { p: Project }) {

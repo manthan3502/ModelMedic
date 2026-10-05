@@ -16,6 +16,7 @@ from backend.app.db.models import BaselineSnapshot, Dataset, Job, Project
 from backend.app.domain.datasets import DatasetError, validate_configuration
 from backend.app.schemas.projects import Configuration, ProjectCreate
 from backend.app.science.baseline import fingerprint
+from backend.app.services.demo import registry
 from backend.app.services.projects import (
     get_project,
     latest_dataset,
@@ -46,12 +47,14 @@ def project_router(
 
     @router.get("")
     def list_projects() -> list[dict[str, Any]]:
+        allowed = registry(store)["projects"] if settings.deployment_mode == "demo" else None
         with sessions() as session:
             return [
                 project_view(session, p, settings)
                 for p in session.scalars(
                     select(Project).order_by(Project.created_at.desc(), Project.id)
                 )
+                if allowed is None or str(p.id) in allowed
             ]
 
     @router.get("/{project_id}")

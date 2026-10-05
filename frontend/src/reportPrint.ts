@@ -1,6 +1,7 @@
 // One reviewed stylesheet for browser print and its onscreen preview.
 export const reportPrintStyles = `
 @page { margin: 15mm; }
+@media print { .print-preview-toolbar { display: none !important; } }
   .topbar, .skip-link, .run-navigation, .report-controls, main > .eyebrow, main > .page-heading, main > .mode-banner { display: none !important; }
   body, main, .run-layout, .run-content, .reliability-report { width: auto; max-width: none; margin: 0; padding: 0; display: block; background: white; color: black; }
   .reliability-report { font-size: 10pt; line-height: 1.45; }
@@ -9,7 +10,10 @@ export const reportPrintStyles = `
   .reliability-report table { min-width: 0; width: 100%; font-size: 9pt; border-collapse: collapse; }
   .reliability-report th, .reliability-report td { min-width: 0; border: 1px solid black; color: black; background: white; padding: .3rem; }
   .reliability-report tr, .report-evidence div { break-inside: avoid; }
-  .reliability-report .table-scroll { overflow: visible; }
+  .reliability-report .table-scroll { overflow: visible; max-height: none; }
+  .reliability-report button:not(.print-return), .reliability-report input, .reliability-report select { display: none !important; }
+  .reliability-report thead th, .reliability-report tbody th[scope=row] { position: static !important; }
+  .reliability-report p, .reliability-report dt, .reliability-report dd, .reliability-report caption, .reliability-report footer { color: black; }
   .report-wide-table { display: none !important; }
   .print-table-alternative { display: block; }
   .print-table-alternative dl { border: 1px solid black; padding: .5rem; }

@@ -21,6 +21,13 @@ from backend.app.core.logging import configure_logging
 from backend.app.db.models import Job, WorkerStatus
 from backend.app.db.session import check_schema, create_db
 from backend.app.schemas.jobs import JobResponse
+from backend.app.services.demo import (
+    DEMO_MESSAGE,
+    PUBLIC_READS,
+    authorize_read,
+    registry,
+    validate_seed_scope,
+)
 from backend.app.storage.local import LocalArtifactStore
 
 
@@ -35,13 +42,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
         engine.dispose()
 
+    store = LocalArtifactStore(settings.artifact_root)
     app = FastAPI(title="ModelMedic", version="0.0.0", lifespan=lifespan)
-    app.include_router(
-        project_router(sessions, LocalArtifactStore(settings.artifact_root), settings)
-    )
-    app.include_router(
-        monitoring_router(sessions, LocalArtifactStore(settings.artifact_root), settings)
-    )
+    app.include_router(project_router(sessions, store, settings))
+    app.include_router(monitoring_router(sessions, store, settings))
 
     def error(request: Request, status: int, code: str, message: str) -> JSONResponse:
         return JSONResponse(
@@ -58,10 +62,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def request_context(request: Request, call_next: RequestResponseEndpoint) -> Response:
         request.state.request_id = str(uuid4())
         if settings.deployment_mode == "demo" and request.method != "GET":
-            response: Response = error(request, 403, "READ_ONLY_DEMO", "This demo is read-only.")
+            response: Response = error(request, 403, "READ_ONLY_DEMO", DEMO_MESSAGE)
         else:
             try:
+                if settings.deployment_mode == "demo":
+                    authorize_read(request.url.path, store)
+                    if request.url.path.rstrip("/") not in PUBLIC_READS:
+                        with sessions() as session:
+                            validate_seed_scope(session, registry(store))
                 response = await call_next(request)
+            except HTTPException as exc:
+                response = error(request, exc.status_code, "DEMO_READ_DENIED", str(exc.detail))
             except Exception:
                 logger.error("request_failed", extra={"request_id": request.state.request_id})
                 response = error(
@@ -81,6 +92,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(diagnostics_router(sessions, settings))
 
+    @app.get("/api/v1/runtime")
+    def runtime() -> dict[str, Any]:
+        return {
+            "deployment_mode": "DEMO_MODE" if settings.deployment_mode == "demo" else "FULL_MODE",
+            "read_only": settings.deployment_mode == "demo",
+            "mutation_explanation": DEMO_MESSAGE,
+        }
+
     @app.get("/api/v1/health/live")
     def live() -> dict[str, str]:
         return {"status": "alive"}
@@ -89,12 +108,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ready() -> dict[str, str]:
         try:
             check_schema(engine)
+            if settings.deployment_mode == "demo":
+                with sessions() as session:
+                    validate_seed_scope(session, registry(store))
         except (SQLAlchemyError, RuntimeError):
             raise HTTPException(503, "Database or schema is not ready.") from None
         return {"status": "ready", "database": "reachable", "schema": "compatible"}
 
     @app.get("/api/v1/health/worker")
     def worker_status() -> dict[str, Any]:
+        if settings.deployment_mode == "demo":
+            return {"recent": False, "status": "NOT_REQUIRED", "heartbeat_at": None}
         with sessions() as session:
             worker = session.scalar(select(WorkerStatus).order_by(WorkerStatus.heartbeat_at.desc()))
             now = session.scalar(select(func.now()))
