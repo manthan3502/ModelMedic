@@ -18,7 +18,9 @@ function Invoke-CheckedDocker {
 Invoke-CheckedDocker @testStack run --rm --no-deps -T api python -m scripts.smoke_m5 prepare
 try {
     Invoke-CheckedDocker @stack restart postgres api worker frontend
-    Invoke-CheckedDocker @stack up -d --wait
+    Invoke-CheckedDocker @stack up -d worker
+    Invoke-CheckedDocker @stack up -d --wait postgres api frontend
+    Invoke-CheckedDocker @testStack run --rm --no-deps -T api python -m scripts.smoke
     Invoke-CheckedDocker @testStack run --rm --no-deps -T api python -m scripts.smoke_m5 verify
     Invoke-CheckedDocker @stack ps
 } finally {

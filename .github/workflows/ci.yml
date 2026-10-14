@@ -1,0 +1,101 @@
+name: ModelMedic verification
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  PYTHONUTF8: '1'
+  MM_CODE_VERSION: ${{ github.sha }}
+  MM_CODE_DIRTY: 'false'
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.11.0'
+          enable-cache: true
+      - run: uv sync --frozen --python 3.12
+      - run: uv run --frozen ruff check backend migrations scripts
+      - run: uv run --frozen ruff format --check backend migrations scripts
+      - run: uv run --frozen mypy
+      - run: uv run --frozen pytest -m 'not integration' -q
+      - run: uv run --frozen python scripts/privacy_check.py --history
+      - run: uv run --frozen python scripts/verify_workflow.py
+  postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
+        env:
+          POSTGRES_USER: modelmedic
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: modelmedic
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U modelmedic -d modelmedic" --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://modelmedic:disposable-ci-only@localhost:5432/modelmedic
+      MM_DATABASE_URL: postgresql+psycopg://modelmedic:disposable-ci-only@localhost:5432/modelmedic
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.11.0'
+          enable-cache: true
+      - run: uv sync --frozen --python 3.12
+      - run: uv run --frozen alembic upgrade head
+      - run: uv run --frozen alembic check
+      - run: uv run --frozen pytest --require-postgres -m integration -q
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: npm audit --audit-level=low
+  system:
+    needs: [backend, postgres, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Create disposable Compose environment without logging its value
+        shell: python
+        run: |
+          import secrets
+          from pathlib import Path
+          Path('.env').write_text('POSTGRES_PASSWORD=' + secrets.token_urlsafe(32) + '\n')
+      - name: M0 through M7 system gate from empty volumes
+        shell: pwsh
+        run: ./scripts/m7-gate.ps1 -ProjectName modelmedic-ci -ApiPort 18011 -FrontendPort 15184
+      - name: Remove disposable CI stack
+        if: always()
+        run: docker compose -p modelmedic-ci down -v --remove-orphans

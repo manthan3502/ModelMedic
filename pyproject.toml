@@ -16,10 +16,17 @@ dependencies = [
   "scipy==1.16.2",
   "pandas==2.3.3",
   "joblib==1.5.2",
+  "boto3==1.43.108",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8,<9", "httpx>=0.28,<1", "ruff>=0.11,<1", "mypy>=1.15,<2"]
+dev = [
+    "pytest>=8,<9",
+    "ruff>=0.11,<1",
+    "mypy>=1.15,<2",
+    "httpx2>=2.13.1",
+    "pyyaml==6.0.3",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

@@ -3,8 +3,10 @@
 Full Mode remains the local API + PostgreSQL + worker + private-artifact workflow.
 The wire configuration is `MM_DEPLOYMENT_MODE=full` or `demo`; the runtime endpoint
 reports the locked names `FULL_MODE` / `DEMO_MODE`. Outside local development,
-`MM_ENVIRONMENT=deployment` requires an explicit mode. This adds no authentication,
-public port exposure, hosting configuration or M7 deployment pipeline.
+`MM_ENVIRONMENT=deployment` requires an explicit mode. M7 additionally requires
+private S3 storage, built same-origin assets and trusted hosts outside local
+development. The Compose override is a loopback-only local Demo rehearsal.
+Production commands and the Railway deployment procedure are in [M7 operation](m7-operations.md).
 
 ## Generate through the real pipeline
 

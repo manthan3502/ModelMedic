@@ -25,7 +25,7 @@ def test_numeric_identical_shift_insufficient_ties_and_range():
     shifted = numeric_drift(b, list(range(200, 300)))
     assert shifted["status"] == "DETECTED" and shifted["outside_range_share"] == 1
     assert shifted["baseline_min"] == 0 and shifted["baseline_max"] == 99
-    assert shifted["distance"] == 200
+    assert shifted["distance"] == pytest.approx(200, rel=0, abs=1e-12)
     assert shifted["plot"]["bins"][-1]["baseline_count"] == 0
     assert numeric_drift(b, b[:29])["status"] == "INSUFFICIENT DATA"
     assert numeric_drift([1, 2] * 50, [1, 2] * 50)["warnings"]

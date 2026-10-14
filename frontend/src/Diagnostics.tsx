@@ -50,9 +50,10 @@ export function Slices({ runId }: { runId: string }) {
 
 export function TrendChart({ data }: { data: TrendsData }) {
   const max = data.signal === 'missing_percent' ? 100 : data.signal === 'brier' && data.class_order.length > 2 ? 2 : data.signal === 'log_loss' ? Math.max(1, ...data.points.map(p => p.value ?? 0), data.reference?.value ?? 0) : 1
-  const x = (i: number) => 125 + i * 530 / Math.max(1, data.points.length - 1), y = (v: number) => 235 - 195 * v / max
-  return <><div className="plot-scroll"><svg className="trend-chart" viewBox="0 0 760 320" role="img" aria-label={`${metricName(data.signal)} across monitoring dates. Separate observed points; unavailable runs remain gaps. Square Mode A; circle Mode B. No interpolation.`}>
-    <path d="M55 35 V235 H700" fill="none" stroke="#647084" /><text x="10" y="45">{number(max)}</text><text x="35" y="240">0</text>
+  const width = Math.max(760, 230 + data.points.length * 115)
+  const x = (i: number) => 185 + i * (width - 290) / Math.max(1, data.points.length - 1), y = (v: number) => 235 - 195 * v / max
+  return <><div className="plot-scroll"><svg className="trend-chart" style={{ minWidth: width }} viewBox={`0 0 ${width} 320`} role="img" aria-label={`${metricName(data.signal)} across monitoring dates. Separate observed points; unavailable runs remain gaps. Square Mode A; circle Mode B. No interpolation.`}>
+    <path d={`M55 35 V235 H${width - 60}`} fill="none" stroke="#647084" /><text x="10" y="45">{number(max)}</text><text x="35" y="240">0</text>
     {data.reference?.value != null && <g><circle cx="72" cy={y(data.reference.value)} r="5" fill="var(--baseline)" /><text x="55" y="265">Baseline</text><text x="55" y="290">n={data.reference.n}</text></g>}
     {data.points.map((p, i) => <g key={p.run_id}><text x={x(i)} y="265" textAnchor="middle" fontSize="10">{p.monitoring_date}</text>{p.value == null ? <text x={x(i)} y="290" textAnchor="middle" fontSize="10">Unavailable</text> : p.mode === 'A' ? <rect x={x(i) - 5} y={y(p.value) - 5} width="10" height="10" fill="#647084" tabIndex={0} role="img" aria-label={`${p.name}, Mode A: ${number(p.value)}, n=${p.n}`} /> : <circle cx={x(i)} cy={y(p.value)} r="5" fill="var(--current)" tabIndex={0} role="img" aria-label={`${p.name}, Mode B: ${number(p.value)}, n=${p.n}`} />}</g>)}
   </svg></div><p>□ Mode A · ○ Mode B. Markers represent saved observations; no line connects unavailable points. Exact values and support follow.</p></>

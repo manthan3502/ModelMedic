@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import time
 from urllib.request import Request, urlopen
 from uuid import UUID
@@ -15,7 +16,7 @@ from backend.app.db.models import BaselineSnapshot, Dataset, ModelArtifact
 from backend.app.db.session import create_db
 from backend.app.storage.local import LocalArtifactStore
 
-BASE = "http://frontend:5173/api/v1/projects"
+BASE = os.environ.get("MM_SMOKE_ORIGIN", "http://frontend:5173") + "/api/v1/projects"
 
 
 def call(path: str = "", method: str = "GET", body: object = None):

@@ -1,6 +1,9 @@
 import logging
+import multiprocessing
 import signal
+import time
 from threading import Event, Thread
+from typing import Any
 from uuid import UUID, uuid4
 
 from backend.app.core.config import Settings
@@ -15,7 +18,7 @@ from backend.app.jobs.slices import slice_result
 from backend.app.jobs.training import training_result
 from backend.app.services.queue import Queue
 from backend.app.storage.base import ArtifactStore
-from backend.app.storage.local import LocalArtifactStore
+from backend.app.storage.factory import artifact_store
 
 logger = logging.getLogger("modelmedic")
 
@@ -32,10 +35,12 @@ def run_once(
     heartbeat_seconds: float,
     store: ArtifactStore | None = None,
     settings: Settings | None = None,
+    claimed_job: Job | None = None,
 ) -> bool:
     queue.heartbeat(worker_id)
-    queue.recover_stale()
-    job = queue.claim()
+    if claimed_job is None:
+        queue.recover_stale()
+    job = claimed_job if claimed_job is not None else queue.claim()
     if job is None:
         return False
     stop_heartbeat = Event()
@@ -95,6 +100,93 @@ def run_once(
     return True
 
 
+def execute_claimed(
+    settings_data: dict[str, Any],
+    worker_id: UUID,
+    job_id: UUID,
+    owner_token: UUID | None,
+    attempt: int,
+) -> None:
+    """A fresh process owns computation; never share SQLAlchemy connections across processes."""
+    settings = Settings(**settings_data)
+    engine, sessions = create_db(settings)
+    try:
+        with sessions() as session:
+            job = session.get(Job, job_id)
+            if not job or job.owner_token != owner_token or job.attempt != attempt:
+                return
+        run_once(
+            Queue(sessions, settings.lease_seconds),
+            worker_id,
+            settings.heartbeat_seconds,
+            artifact_store(settings),
+            settings,
+            claimed_job=job,
+        )
+    finally:
+        engine.dispose()
+
+
+def supervise(queue: Queue, settings: Settings, worker_id: UUID, job: Job, stop: Event) -> None:
+    """Kill computation at its wall-clock budget; PostgreSQL fencing still governs publication.
+
+    Shutdown/crash leaves an expiring lease for the existing retry policy. A timeout
+    is a deterministic failure, not a loop of expensive automatic retries. Unpublished
+    attempt objects stay private and are removed on retry/discard/project deletion.
+    """
+    child = multiprocessing.get_context("spawn").Process(
+        target=execute_claimed,
+        args=(settings.model_dump(), worker_id, job.id, job.owner_token, job.attempt),
+    )
+    queue.heartbeat(worker_id, job)
+    child.start()
+    deadline = time.monotonic() + settings.job_timeout_seconds
+    next_heartbeat = time.monotonic() + settings.heartbeat_seconds
+    timed_out = False
+    try:
+        while child.is_alive() and not stop.wait(0.1):
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+            if time.monotonic() >= next_heartbeat:
+                queue.heartbeat(worker_id, job)
+                next_heartbeat = time.monotonic() + settings.heartbeat_seconds
+    except OwnershipLost:
+        stop_computation(child)
+        logger.warning("job_ownership_lost", extra={"job_id": str(job.id)})
+        return
+    finally:
+        if child.is_alive():
+            stop_computation(child)
+        child.join()
+    if stop.is_set():
+        return  # Recovery after restart uses max attempts and a new ownership token.
+    if timed_out or child.exitcode != 0:
+
+        def failure(session: Any) -> None:
+            owned = session.get(Job, job.id)
+            assert owned
+            owned.error_code = "JOB_TIMEOUT" if timed_out else "WORKER_PROCESS_FAILED"
+            owned.error_message = (
+                "Job exceeded the configured execution budget. No final results were published."
+                if timed_out
+                else "Worker process stopped. No final results were published."
+            )
+
+        try:
+            queue.finalize(job, failed=True, result=failure)
+        except OwnershipLost:
+            pass  # A completed/replaced worker cannot be overwritten by the supervisor.
+
+
+def stop_computation(child: Any) -> None:
+    child.terminate()
+    child.join(timeout=5)
+    if child.is_alive():
+        child.kill()
+        child.join()
+
+
 def main() -> None:
     configure_logging()
     settings = Settings()  # type: ignore[call-arg]
@@ -108,10 +200,13 @@ def main() -> None:
             raise RuntimeError("Demo mode does not run the worker")
         queue = Queue(sessions, settings.lease_seconds)
         worker_id = uuid4()
-        store = LocalArtifactStore(settings.artifact_root)
         logger.info("worker_started")
         while not stop.is_set():
-            run_once(queue, worker_id, settings.heartbeat_seconds, store, settings)
+            queue.heartbeat(worker_id)
+            queue.recover_stale()
+            job = queue.claim()
+            if job:
+                supervise(queue, settings, worker_id, job, stop)
             stop.wait(settings.poll_seconds)
     finally:
         engine.dispose()

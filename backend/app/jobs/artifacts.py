@@ -35,7 +35,12 @@ def load_trusted(
     store: ArtifactStore, key: str, expected_hash: str, manifest: dict[str, Any]
 ) -> Any:
     # Callers obtain all three arguments from the trusted model_artifacts database row.
-    data = store.get(key)
+    try:
+        data = store.get(key)
+    except OSError:
+        raise TrainingError(
+            "The internal model artifact is unavailable. No inference was run."
+        ) from None
     runtime = environment()
     if (
         sha256(data).hexdigest() != expected_hash

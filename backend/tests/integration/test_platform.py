@@ -1,3 +1,4 @@
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Event
@@ -14,7 +15,7 @@ from backend.app.db.models import Base, Job, WorkerStatus
 from backend.app.db.session import SCHEMA_REVISION, check_schema
 from backend.app.domain.jobs import DuplicateActiveJob, OwnershipLost
 from backend.app.jobs.worker import main as worker_main
-from backend.app.jobs.worker import run_once
+from backend.app.jobs.worker import run_once, supervise
 from backend.app.main import create_app
 from backend.app.services.queue import Queue
 
@@ -199,3 +200,45 @@ def test_controlled_failure_is_sanitized_and_not_retried(db):
         assert saved.error_code == "JOB_FAILED"
         assert "Traceback" not in saved.error_message
     assert queue.claim() is None
+
+
+def slow_process_fixture(*args):
+    time.sleep(10)
+
+
+def test_real_process_timeout_is_fenced_deterministic_failure(database_url, db, monkeypatch):
+    _, sessions = db
+    queue = Queue(sessions)
+    created = queue.enqueue("M0_DUMMY", "INTERNAL", uuid4())
+    claimed = queue.claim()
+    monkeypatch.setattr("backend.app.jobs.worker.execute_claimed", slow_process_fixture)
+    # A real spawned process that cannot complete within this deliberately tiny budget.
+    settings = Settings(database_url=database_url, job_timeout_seconds=1)
+    supervise(queue, settings, uuid4(), claimed, Event())
+    with sessions() as session:
+        result = session.get(Job, created.id)
+        assert result.state == "FAILED" and result.error_code == "JOB_TIMEOUT"
+        assert result.attempt == 1 and result.owner_token is None
+    assert queue.claim() is None
+    with pytest.raises(OwnershipLost):
+        queue.finalize(claimed)
+
+
+def test_shutdown_leaves_lease_and_restart_recovers_with_new_token(database_url, db):
+    _, sessions = db
+    queue = Queue(sessions)
+    created = queue.enqueue("M0_DUMMY", "INTERNAL", uuid4())
+    claimed = queue.claim()
+    stopping = Event()
+    stopping.set()
+    supervise(queue, Settings(database_url=database_url), uuid4(), claimed, stopping)
+    with sessions() as session:
+        assert session.get(Job, created.id).state == "RUNNING"
+    expire(sessions, claimed)
+    assert queue.recover_stale() == 1
+    assert run_once(queue, uuid4(), 1)
+    with sessions() as session:
+        result = session.get(Job, created.id)
+        assert result.state == "SUCCEEDED" and result.attempt == 2
+    with pytest.raises(OwnershipLost):
+        queue.finalize(claimed)

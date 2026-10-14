@@ -18,6 +18,7 @@ x-backend: &backend
     MM_MAX_FEATURES: ${MM_MAX_FEATURES:-50}
     MM_MAX_CATEGORIES: ${MM_MAX_CATEGORIES:-100}
     MM_MAX_ENCODED_COLUMNS: ${MM_MAX_ENCODED_COLUMNS:-2000}
+    MM_JOB_TIMEOUT_SECONDS: ${MM_JOB_TIMEOUT_SECONDS:-1800}
   volumes:
     - artifacts:/artifacts
   depends_on:
@@ -25,7 +26,7 @@ x-backend: &backend
       condition: service_healthy
 services:
   postgres:
-    image: postgres:17-bookworm
+    image: postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-modelmedic}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -49,6 +50,9 @@ services:
   worker:
     <<: *backend
     command: [python, -m, backend.app.jobs.worker]
+    healthcheck:
+      disable: true
+    stop_grace_period: 10s
   frontend:
     build: ./frontend
     ports:

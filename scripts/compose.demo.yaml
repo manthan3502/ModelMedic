@@ -1,9 +1,10 @@
+# Loopback-only local Demo Mode rehearsal; production requires private S3 storage.
 # Apply only after the real-pipeline seed has completed in Full Mode.
 # Stop the existing Full Mode worker before starting this read-only topology.
 services:
   api:
     environment:
-      MM_ENVIRONMENT: deployment
+      MM_ENVIRONMENT: local
       MM_DEPLOYMENT_MODE: demo
     volumes:
       - artifacts:/artifacts:ro

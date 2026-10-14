@@ -12,3 +12,5 @@ frontend/dist
 artifacts
 data
 test-results
+docs
+.github

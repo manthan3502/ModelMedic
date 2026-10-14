@@ -11,14 +11,14 @@ from backend.app.core.config import Settings
 from backend.app.db.models import Job, MonitoringRun, Project, RunReport, SliceAnalysis
 from backend.app.main import create_app
 from backend.app.services.demo import REGISTRY_KEY
-from backend.app.storage.local import LocalArtifactStore
+from backend.app.storage.factory import artifact_store
 from scripts.seed_demo import digest, verify
 from scripts.smoke_m3 import ROOT, run_call
 
 
 def main():
     settings = Settings()
-    store = LocalArtifactStore(settings.artifact_root)
+    store = artifact_store(settings)
     seed = json.loads(store.get(REGISTRY_KEY))
     engine, sessions = create_db_for_checks(settings)
     tables = (Project, MonitoringRun, Job, SliceAnalysis, RunReport)

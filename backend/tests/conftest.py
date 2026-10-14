@@ -11,6 +11,17 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.db.models import Base
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--require-postgres", action="store_true", help="Fail if PostgreSQL is unavailable"
+    )
+
+
+def pytest_configure(config):
+    if config.getoption("--require-postgres") and not os.environ.get("TEST_DATABASE_URL"):
+        raise pytest.UsageError("TEST_DATABASE_URL is mandatory for this integration gate")
+
+
 @pytest.fixture(scope="session")
 def database_url():
     """Create a new disposable database; never drop/truncate the supplied database."""

@@ -1,0 +1,7 @@
+# Test the actual production image/static serving on loopback, using the local seed.
+# This is NOT an external deployment or a substitute for private S3 provider verification.
+services:
+  api:
+    build:
+      target: production
+    image: modelmedic-backend:production-test

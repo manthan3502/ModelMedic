@@ -43,7 +43,7 @@ nav { display: flex; align-self: stretch; gap: 32px; }
 nav a { display: flex; align-items: center; text-decoration: none; color: var(--muted); border-block-end: 2px solid transparent; padding: 16px 2px; font-weight: 500; }
 nav a.active { color: var(--text); border-color: var(--baseline); }
 .menu-toggle { display: none; }
-main { max-width: 1320px; margin: 0 auto; padding: 54px 40px 36px; }
+main { max-width: 1320px; margin: 0 auto; padding: 54px 40px 36px; overflow-wrap: anywhere; }
 h1, h2, h3, p { margin-block-start: 0; }
 h1 { font-size: 34px; font-weight: 600; line-height: 1.25; letter-spacing: -1px; margin-block-end: 12px; }
 h2 { font-size: 22px; font-weight: 500; line-height: 1.4; letter-spacing: -.4px; }

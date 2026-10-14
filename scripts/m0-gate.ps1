@@ -26,7 +26,11 @@ Invoke-Docker @composeArgs build
 Invoke-Docker @composeArgs up -d --wait postgres
 # One explicit migration step. API/worker never migrate on startup.
 Invoke-Docker @composeArgs run --rm --no-deps api alembic upgrade head
-Invoke-Docker @composeArgs up -d --wait
+# Workers expose PostgreSQL heartbeats, not an HTTP healthcheck. Some Compose
+# versions reject --wait for an explicitly disabled image healthcheck; the real
+# heartbeat and executed dummy job below remain mandatory worker readiness checks.
+Invoke-Docker @composeArgs up -d worker
+Invoke-Docker @composeArgs up -d --wait api frontend
 Invoke-Docker build --target test --build-arg "CODE_VERSION=$env:MM_CODE_VERSION" --build-arg "CODE_DIRTY=$env:MM_CODE_DIRTY" -t modelmedic-backend:test .
 Invoke-Docker @testArgs run --rm --no-deps -T api ruff check --no-cache backend migrations scripts
 Invoke-Docker @testArgs run --rm --no-deps -T api ruff format --check --no-cache backend migrations scripts
