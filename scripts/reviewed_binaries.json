@@ -1,4 +1,29 @@
 {
   "version": 1,
-  "assets": []
+  "assets": [
+    {
+      "path": "docs/assets/modelmedic/01-baseline-results.png",
+      "sha256": "7b102dfcc86c8b57a9302e7518c0567057ab1dd4dc52951603aae4cea0d18c78"
+    },
+    {
+      "path": "docs/assets/modelmedic/02-mode-a-overview.png",
+      "sha256": "ca6ca8d5a809a463fa6d94c68c33617d4d8788362ca484630ef6a40e854442a3"
+    },
+    {
+      "path": "docs/assets/modelmedic/03-feature-detail.png",
+      "sha256": "24b56dbafe73c81019cbedb62b1f8569092cf47529f8ad373eb295e5c21ad1b4"
+    },
+    {
+      "path": "docs/assets/modelmedic/04-mode-b-performance.png",
+      "sha256": "b4f985d0e83543532474f6be94e6f7fc1dc8922d19e392569c8968ae80a04c42"
+    },
+    {
+      "path": "docs/assets/modelmedic/05-calibration.png",
+      "sha256": "bef17c35d939bc3ee39f41ed94d9f4523bc2a838b745ade49e8e175d45c81495"
+    },
+    {
+      "path": "docs/assets/modelmedic/06-trends.png",
+      "sha256": "fe538ab2462bc53dae09daec191f5e55d6e394c4325b5dddd80e8b0c7e3ba188"
+    }
+  ]
 }

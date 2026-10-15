@@ -1,316 +1,220 @@
 # ModelMedic
 
-ML Reliability & Drift Analysis Platform for classical tabular classification.
-ModelMedic is designed to distinguish data, prediction, confidence and measured
-performance changes. Data drift alone does not establish predictive degradation.
+**ML reliability and drift analysis for tabular classification systems.**
 
-## Current status
+ModelMedic helps you investigate whether a classifier behaves differently on newer
+data. Establish a reproducible baseline, freeze its preprocessing and model, then
+compare later datasets with that reference. It separates changes in inputs,
+predictions and confidence from changes in measured performance—and makes clear
+which conclusions require labels.
 
-**M5 — Feature Diagnostics + Slices + Trends + Reports.** Established baselines
-support unchanged Mode A and Mode B monitoring. Feature detail keeps distribution,
-missingness and baseline reliance separate. Mode B supports additive categorical
-slices; Trends selects one saved signal at a time with unlabeled outcome gaps.
-Reliability reports retain fixed versioned payloads and support browser printing.
-The reviewed Methodology page includes a searchable glossary. Stop before M6.
+**[Explore the live demo](https://modelmedic-production.up.railway.app/projects)** ·
+[Methodology](docs/methodology.md) ·
+[Engineering evidence](docs/m7-verification.md)
 
-The four [locked specifications](docs/specs/) remain unchanged. Scientific
-implementation details are documented in [methodology](docs/methodology.md).
+The public demo is **read-only**, uses deterministic synthetic data, and shows
+saved results from the real validation, training and analysis pipeline.
 
-## Prerequisites
+## Why ModelMedic?
 
-- Git
-- Docker Desktop using Linux containers, with Docker Compose
-- PowerShell 7 for the automated gate script (individual Docker commands also work elsewhere)
-- For optional host development: Python 3.12, uv 0.11.0+, Node.js 24 and npm
+A model can keep returning predictions while its inputs, confidence, calibration
+or actual performance changes. ModelMedic puts these signals side by side, with
+sample counts and explicit limitations. Changed inputs alone do not prove worse
+predictions, and reliability is not reduced to a single health score.
 
-## Start locally
+## What it does
 
-From the repository root, copy `.env.example` to `.env`. Replace the password
-placeholder with a random local password consisting of URL-safe letters/digits.
-Do not commit `.env`. PostgreSQL is accessible only on the internal Compose network.
+- **Establish a baseline:** validate a CSV, review features and preprocessing,
+  select a classifier and weighting, explicitly train, then freeze the baseline.
+- **Analyze later data:** inspect drift, missingness, predictions and confidence;
+  add performance, calibration, class/error diagnostics and slices when labels exist.
+- **Keep the evidence:** revisit saved diagnostics, trends and deterministic
+  reliability reports, with table alternatives and Print / Save as PDF.
+
+| Monitoring mode | Evidence available |
+|---|---|
+| **Mode A — no labels** | Data drift, missingness, prediction-distribution and confidence changes. **Current predictive performance and calibration cannot be measured.** |
+| **Mode B — complete, valid labels** | All Mode A evidence, plus baseline/current performance, calibration, class/error diagnostics and exploratory slices. |
+
+Partial labels and unknown classes block validation; they are not silently treated
+as Mode A. Neither mode refits preprocessing or retrains the established model.
+
+## Demo workflow
+
+Open **Synthetic reliability lab** in the
+[live demo](https://modelmedic-production.up.railway.app/projects):
+
+1. **Baseline Results:** held-out evaluation, calibration and model reliance.
+2. **Period 2 / Mode A:** Data, Feature Detail, Predictions and Confidence;
+   label-dependent pages explain why performance evidence is unavailable.
+3. **Period 3 / Mode B:** Performance, Calibration, Classes & Errors and saved Slices.
+4. **Trends / Reliability Report:** saved observations and their interpretation limits.
+
+The **B–A–B** sequence means labeled, unlabeled, labeled. Performance trends keep
+a gap for the middle period; they do not invent or interpolate missing evidence.
+All displayed results come from real worker jobs on deterministic synthetic data.
+
+The server limits public access to approved synthetic reads and blocks uploads,
+training, analysis and deletion. Use local Full Mode for your own CSV files.
+
+## Screenshots
+
+| Baseline Results | Mode A — Unlabeled Monitoring |
+| :---: | :---: |
+| [![Baseline Results showing held-out metrics, development and reference counts, and seed 42](docs/assets/modelmedic/01-baseline-results.png)](docs/assets/modelmedic/01-baseline-results.png)<br>Frozen baseline, held-out evaluation and reproducible reference settings. | [![Mode A overview with labels unavailable and performance and calibration explicitly unmeasurable](docs/assets/modelmedic/02-mode-a-overview.png)](docs/assets/modelmedic/02-mode-a-overview.png)<br>Drift and model behavior evidence; current performance requires labels. |
+| **Feature Detail**<br>[![Categorical segment feature with detected drift, BH-adjusted p-value and baseline/current category shares](docs/assets/modelmedic/03-feature-detail.png)](docs/assets/modelmedic/03-feature-detail.png)<br>Detected categorical drift, adjusted p-values, sample counts and distributions. | **Mode B — Performance**<br>[![Mode B performance table comparing held-out baseline and labeled current metrics with support counts](docs/assets/modelmedic/04-mode-b-performance.png)](docs/assets/modelmedic/04-mode-b-performance.png)<br>Separate baseline/current metrics with outcome support counts. |
+| **Calibration**<br>[![Baseline and current probability calibration curves with observed frequencies and labeled sample counts](docs/assets/modelmedic/05-calibration.png)](docs/assets/modelmedic/05-calibration.png)<br>Baseline/current calibration, observed frequencies and sample support. | **Trends — Preserved Mode A Gap**<br>[![Balanced Accuracy history with Period 2 Mode A marked unavailable between labeled runs](docs/assets/modelmedic/06-trends.png)](docs/assets/modelmedic/06-trends.png)<br>Balanced Accuracy keeps the unlabeled Mode A period unavailable. |
+
+## System architecture
+
+The API handles uploads, configuration and retrieval; a dedicated Python worker
+runs validation and scientific computation outside HTTP requests. PostgreSQL
+stores metadata, immutable results and the job queue. CSV, canonical Parquet,
+model and reference artifacts stay in private storage.
+
+```mermaid
+flowchart LR
+    UI["React + TypeScript frontend"] -->|Same-origin requests| API["FastAPI"]
+    API --> DB["PostgreSQL: metadata, results, jobs"]
+    API --> Store["Private artifact store"]
+    Worker["Python worker: Full Mode"] -->|Claim jobs and publish results| DB
+    Worker --> Store
+```
+
+The API and worker share one backend codebase and image. Queue claims use
+`SKIP LOCKED`; leases, heartbeats and ownership checks prevent stale workers from
+publishing results. Completion and result publication share a transaction.
+
+Local Compose runs frontend, API, worker and PostgreSQL with a private artifact
+volume. Production serves the built React assets and API from **one origin** on
+Railway, with managed PostgreSQL and private S3-compatible storage. The public
+read-only demo needs no running worker after private seeding. GitHub Actions
+verifies the source and full container stack; see
+[production operations](docs/m7-operations.md) for deployment details.
+
+## Reliability methodology
+
+- **Independent evaluation:** an 80/20 stratified Development/Heldout split with
+  seed 42; five-fold CV fits preprocessing within each development fold.
+- **Explicit model choice:** Logistic Regression, Random Forest or Gradient
+  Boosting, with Standard or Balanced weighting and fixed settings.
+- **Frozen reference:** monitoring never refits preprocessing or the model.
+  Behavior comparisons use the held-out reference; raw feature and missingness
+  comparisons use all valid baseline rows.
+- **Separate statistical evidence:** numeric/categorical feature drift and
+  missingness tests share a within-run Benjamini–Hochberg FDR correction.
+  Statistical significance does not establish practical impact or causality.
+
+**Mode A cannot establish performance degradation.** Mode B adds labeled
+performance, calibration and error evidence, with support and availability reasons.
+Exact tests, thresholds, calibration and reliance rules are in
+[Methodology](docs/methodology.md) and the [scientific audit](docs/m7-scientific-audit.md).
+
+## Tech stack
+
+| Area | Technologies |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, React Router, TanStack Query |
+| Backend | Python 3.12, FastAPI, Pydantic, SQLAlchemy 2, Alembic |
+| Data / ML | scikit-learn, NumPy, SciPy, pandas, PyArrow / Parquet, joblib |
+| Database / queue | PostgreSQL 17, psycopg, PostgreSQL-backed leased jobs |
+| Storage | Private local Docker volume; private S3-compatible store via boto3 in production |
+| Infrastructure | Docker, Compose, Railway |
+| Testing / CI | pytest, Vitest, Testing Library, Ruff, mypy, ESLint, TypeScript checks, GitHub Actions |
+
+## Engineering and verification
+
+M0–M7 are complete. Verification recorded on **2026-10-14** includes:
+
+- **194 backend tests** = 131 unit/scientific + 63 real PostgreSQL integration.
+  The native 131-test replay and additional 63-test PostgreSQL run repeat these
+  suites; they are not extra unique tests.
+- **47 frontend tests**, lint/type checks, production build, Ruff/formatting/mypy.
+- **Full M0–M7 Compose gate:** all 12 target/classifier/weighting combinations,
+  monitoring, slices, reports and restart persistence.
+- **180 prohibited Demo method/route pairs denied**, seeded read scoping and fail-closed checks.
+- **Zero npm audit vulnerabilities at M7 verification**, a dated audit result.
+
+All four CI jobs—backend, PostgreSQL, frontend and system—passed on the final M7 commit.
+[Exact-commit CI run](https://github.com/manthan3502/ModelMedic/actions/runs/38594272265) ·
+[Verification record](docs/m7-verification.md)
+
+The current public web image was cleanly rebuilt and redeployed from M7 commit
+`27e5b8c0709f0ba448232e1675ceff85191af77e`. The post-redeploy public smoke passed:
+HTTPS UI/deep links, the B–A–B gap, all 180 denied method/route pairs and persisted
+fingerprints. Immutable seeded demo results retain their original
+pre-commit/dirty-candidate provenance and are not rewritten.
+
+## Running locally
+
+Requires Git and Docker Desktop with Linux containers/Compose. On a fresh
+checkout, use PowerShell and replace the `.env` password placeholder with a random
+local password of URL-safe letters/digits before starting. Never commit `.env`.
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env and replace the password placeholder before proceeding.
+# Edit .env to replace the password placeholder; do not commit it.
 $env:MM_CODE_VERSION = (git rev-parse HEAD).Trim()
 $env:MM_CODE_DIRTY = if (git status --porcelain) { 'true' } else { 'false' }
 docker compose config --quiet
 docker compose build
 docker compose up -d --wait postgres
 docker compose run --rm --no-deps api alembic upgrade head
-docker compose up -d --wait
+docker compose up -d worker
+docker compose up -d --wait api frontend
 ```
 
-The explicit Alembic command runs once before the API and worker start. Neither
-process applies migrations automatically. The worker refuses incompatible schemas.
-API and worker use the same built image and synchronous SQLAlchemy code.
+Open **[localhost:5173](http://localhost:5173)** to upload your own CSVs. Full Mode
+has no authentication and must stay private. Stop with `docker compose down`,
+which retains data volumes. See [M7 operations](docs/m7-operations.md) for gates,
+resource settings, troubleshooting and deployment instructions.
 
-- Frontend: <http://localhost:5173>
-- API liveness: <http://localhost:8000/api/v1/health/live>
-- API readiness (database and schema): <http://localhost:8000/api/v1/health/ready>
-- Worker heartbeat: <http://localhost:8000/api/v1/health/worker>
+## Project scope and known limitations
 
-The Vite development proxy forwards `/api` to the API, so browser requests remain
-same-origin. The Compose frontend is a development service; a production host
-must serve the built assets on the API origin, as required by the locked architecture.
-No production deployment is part of M5.
+**V1 supports CSV-based tabular binary and multiclass classification** with numeric
+and categorical features. It is a batch analysis tool for small-to-medium
+in-memory datasets.
 
-`docker compose down` stops this stack while retaining the database and artifact
-volumes. Do not remove volumes containing data you need.
+- No AutoML, automatic retraining, model serving or single global health/reliability score.
+- No raw-text/NLP, images, deep learning, regression, multilabel or time-series modeling.
+- Small samples or absent classes can make results unavailable. Performance deltas
+  have no uncertainty intervals; slices are exploratory, not a fairness audit.
+- Resource limits and synthetic benchmarks are guardrails, not capacity guarantees.
+- Failed artifact cleanup can leave an inaccessible private prefix until retry,
+  discard or project deletion; durable garbage collection remains a limitation.
 
-## Complete M5 verification (including M0–M4 regressions)
-
-```powershell
-./scripts/m5-gate.ps1
-```
-
-The gate builds and explicitly migrates the four-service `modelmedic-m5-verified`
-stack (API 18009, frontend 15182), runs all scientific/PostgreSQL/backend/frontend
-checks, and exercises all 12 binary/multiclass × classifier × weighting
-combinations through the real frontend proxy and leased worker. It verifies
-training, artifacts, establishment and immutability, then binary/multiclass Mode A
-validation, drift, predictions, confidence and immutable reloads. Mode B binary
-and multiclass smoke tests include complete support, absent classes, calibration,
-errors and privacy checks. Synthetic smoke projects are removed using test-only
-cleanup; no product unlock route exists. M5 adds mixed B-A-B history, raw-category
-slices, idempotent requests, all trend signal groups, report/core hash equality
-and restart persistence. All four services restart before stored results are
-verified again. The fixture is removed in the gate’s cleanup step.
-
-The PostgreSQL tests create and migrate a uniquely named disposable database,
-then remove only that database. The supplied connection needs CREATEDB. A run
-without TEST_DATABASE_URL skips integration tests and is not a complete gate.
-The Compose test override supplies the connection automatically.
-
-The M0/M1 gate scripts remain regression entry points. The M1 flow still stops
-at confirmation without training; M2 enables training only after explicit action.
-After the executable gate, run `uv run python scripts/privacy_check.py`, inspect
-the diff and locked files, and complete browser verification before committing.
-
-Services remain running for inspection. To stop without deleting data:
-
-```powershell
-docker compose -p modelmedic-m5-verified down
-```
-
-## Individual checks and host development
-
-```powershell
-uv sync --locked
-uv run ruff check backend migrations scripts
-uv run ruff format --check backend migrations scripts
-uv run mypy
-uv run pytest
-cd frontend
-npm ci
-npm run lint
-npm run typecheck
-npm run test
-npm run build
-npm run dev
-```
-
-For host API/worker development, set `MM_CODE_VERSION` and `MM_CODE_DIRTY` as
-above, and set `MM_DATABASE_URL` to a reachable
-`postgresql+psycopg://...` connection, run `uv run alembic upgrade head`, then run
-`uv run uvicorn backend.app.main:create_app --factory --no-access-log` and
-`uv run python -m backend.app.jobs.worker` in separate terminals. There is no
-SQLite fallback. The default Compose database intentionally has no host port.
-
-### Internal dummy-job verification
-
-This command is available only in local full mode. It creates no product feature:
-
-```powershell
-docker compose exec api python -m backend.app.jobs.dev
-# Read the printed job ID:
-# GET /api/v1/jobs/<job-id>
-docker compose exec api python -m backend.app.jobs.dev --fail
-```
-
-Use `--target <UUID>` to specify an internal target. An active duplicate is
-rejected; a terminal job does not prevent a later job. `--fail` produces a
-sanitized terminal failure without automatic retry. Lease recovery permits at
-most one retry; a second lost lease becomes `FAILED / WORKER_LOST`.
+See [operations and carried limitations](docs/m7-operations.md) and
+[resource evidence](docs/m7-verification.md#performance--resource-validation).
 
 ## Repository structure
 
 ```text
-frontend/          React, Router, TanStack Query, tokens and component tests
-backend/app/api/   Project, upload and draft-configuration HTTP boundary
-backend/app/core/  Configuration and structured logging
-backend/app/db/    SQLAlchemy models and schema compatibility checks
-backend/app/domain/ Job states, deterministic CSV/profile/configuration rules
-backend/app/schemas/ Response contracts
-backend/app/services/ Transactional queue and project services
-backend/app/jobs/  Dedicated worker and internal developer command
-backend/app/storage/ ArtifactStore protocol and LocalArtifactStore
-backend/app/science/ Deterministic split, pipeline, metrics, calibration and importance
-backend/tests/    Unit and real PostgreSQL integration tests
-migrations/       Explicit Alembic revision history
-scripts/          Complete gate and Docker smoke verification
-docs/specs/       Four immutable specifications
+frontend/              React UI, scientific views and component tests
+backend/app/api/       HTTP boundaries for projects, monitoring and diagnostics
+backend/app/science/   Baseline, drift, labeled metrics, calibration and slices
+backend/app/jobs/      Dedicated worker and supervised job execution
+backend/app/services/  Queue, lifecycle, immutable reports, trends and Demo scoping
+backend/app/storage/   Private local and S3-compatible artifact adapters
+backend/app/operations/ Private seed and object-store operator commands
+backend/tests/         Unit/scientific and PostgreSQL integration tests
+migrations/            Explicit Alembic schema history
+scripts/               Milestone gates, smoke checks, benchmarks and privacy guards
+.github/workflows/     Backend, PostgreSQL, frontend and system CI
+Dockerfile             Backend, test and production image stages
+compose.yaml           Four-service local Full Mode stack
+railway.toml           Public read-only web deployment configuration
+docs/                  Methodology, operations, audits and locked specifications
 ```
 
-## Storage and security boundaries
+## Documentation
 
-Artifacts are private, server-keyed objects on a shared Docker volume; raw data
-is not stored as PostgreSQL blobs. The local adapter rejects traversal and absolute
-paths, publishes complete objects atomically, and refuses overwrites. Its directory
-must remain controlled by the service account. The protocol permits a future private
-S3-compatible adapter without changing scientific logic.
+- [Reliability methodology](docs/methodology.md) — scientific rules and interpretation limits.
+- [Scientific audit](docs/m7-scientific-audit.md) — specification-to-code/test mapping.
+- [Operations and deployment](docs/m7-operations.md) — local checks and private production setup.
+- [Demo Mode](docs/demo-mode.md) — real-pipeline synthetic seeding and read boundaries.
+- [M7 verification](docs/m7-verification.md) — dated acceptance and resource evidence.
+- [Locked specifications](docs/specs/) — product, architecture, UI/UX and milestone contracts.
 
-Local ports bind to loopback. This local stack has no authentication and must not be
-exposed publicly. Configuration outside local mode requires an explicit deployment
-mode. The basic demo guard denies non-GET requests, but full demo functionality
-and its product UI remain M6 work. No real datasets or model artifacts ship here.
+## Author
 
-See [foundation architecture](docs/architecture.md) for queue transaction boundaries
-and the archived [M0 verification](docs/m0-verification.md) for foundation evidence.
-
-## Baseline setup and import contract
-
-Uploads use a raw CSV request body (`Content-Type: text/csv`), streamed to a
-server-controlled temporary file. The API counts actual bytes and rejects an
-oversized upload before publishing or queueing it. Filenames never determine
-storage paths. `DATASET_VALIDATE` runs in the existing leased PostgreSQL worker.
-Validation report and profile writes share the fenced job-finalization transaction.
-
-UTF-8 (optional BOM) is supported. Duplicate/empty headers, reserved `__mm_`
-headers, malformed row widths/quoting, empty data, unsafe encoding and resource
-limit violations produce reviewed diagnostics. Empty and whitespace-only cells
-become null. Literal `NA`, `N/A`, `None`, `null`, `unknown` and `?` remain values.
-Rows and categorical values are never silently deleted, trimmed or merged.
-
-Canonical Parquet v1 stores uint64 ordinal `__mm_row_id` and nullable Arrow
-strings for every user column. Keeping lexical values lossless allows numeric
-columns to be configured as categories without merging `001` and `1`. Numeric
-semantics are validated during inference/override review; numeric conversion and
-learned preprocessing belong to the later fitted pipeline. Original and canonical
-SHA-256, canonical schema version, profile and validation report are persisted.
-Serialization uses pinned PyArrow 21.0.0, Parquet 2.6, Zstandard, no dictionaries
-and no statistics. Revalidating identical bytes produces identical canonical bytes.
-
-Only eligible 2–10-class, fully labeled targets with at least 100 observations
-per class can be configured. Binary targets require an explicit positive class.
-Safe target-label whitespace normalization is blocked when it would merge labels.
-Discrete numeric labels are valid classes; continuous numeric outcomes outside the
-class cap and JSON list/object target cells are rejected. Feature inclusion is
-explicit; unsupported datetime,
-free-text and high-cardinality categorical features are visibly excluded with reasons.
-Encoded-column estimates conservatively include one missing bucket per categorical.
-
-Resource defaults are 25 MiB / 50,000 rows / 100 input columns / 50 included
-features / 100 categories / 2,000 encoded columns. `MM_*` settings in `.env.example`
-configure the computational limits; the UI displays the backend's actual limits.
-Pre-split support is enforced now. The authoritative actual held-out support
-check (at least 20 per class) is enforced during M2 training before fitting.
-
-Draft re-upload clears configuration. Active validation jobs block mutation and
-deletion; established projects cannot be changed by baseline mutation routes. Deletion removes the
-entire project artifact prefix and cascades metadata/jobs. An external deletion
-failure leaves `deletion_pending` for retry and blocks other changes. No new public
-demo/deployment features are added; the existing fail-closed guard covers all routes.
-
-## Baseline training and locking
-
-Each leased BASELINE_TRAIN execution creates an attempt snapshot. No scientific
-work runs inside an HTTP request or while holding the queue claim transaction.
-Results and the terminal job transition publish in the same ownership-fenced
-transaction. Artifact keys include the snapshot ID and cannot be overwritten.
-
-Changing a trained draft requires explicit discard confirmation. Establishment
-requires a TRAINED snapshot with the current dataset/configuration fingerprint,
-and atomically freezes it with the project. Existing baseline-changing APIs
-then return 409. A different baseline requires a new project.
-
-The manifest records Git SHA, dirty/clean build state, source-content digest,
-scientific versions and artifact SHA-256. Rebuild after committing to stamp
-new training attempts with the final commit; historical manifests never change.
-Only the worker loads internally generated joblib artifacts, after integrity,
-format, Python-minor and exact scikit-learn checks.
-
-
-## Unlabeled monitoring workflow (M3)
-
-Open an established project → New monitoring run → Details → Upload current CSV
-→ Compatibility review → Mode A declaration → Analyze current data → Saved results.
-The worker applies the exact frozen baseline snapshot, without fitting or retraining.
-Required features must be present; extras are allowed, shown and ignored for the
-model. Frozen numeric columns must contain only missing or safely numeric values;
-categorical values are never silently trimmed or re-inferred. Minimum 50 rows.
-
-Data / Feature Detail compare raw observations with all valid baseline rows.
-Predictions / Confidence use the immutable M2 held-out reference. Distribution and
-missingness tests share one BH family; prediction/confidence comparisons remain
-separate. Every chart has numerical evidence and a table. Published outputs retain
-bins, shares, test membership, hashes, snapshot and code/methodology provenance.
-
-Complete valid labels identify Mode B before an explicit Analyze action.
-Partial or unknown labels block validation; they never silently become Mode A.
-No severity score, accuracy degradation claim or automatic retraining instruction
-is generated. Run history preserves monitoring-date/timestamp/ID ordering.
-
-The historical M3 gate and [M3 verification](docs/m3-verification.md) remain
-available. The current gate adds labeled scientific/PostgreSQL/frontend checks;
-see [M4 verification](docs/m4-verification.md) for the complete milestone report.
-
-## Labeled monitoring workflow (M4)
-
-Upload a current CSV containing complete labels from the frozen class list →
-Review Mode B and compatibility → Analyze → Overview, Performance, Calibration
-and Classes & Errors. Partial labels or unknown classes are rejected rather than
-downgraded to Mode A. No preprocessing or model is refitted.
-
-Performance tables show saved baseline/current values, signed deltas in metric
-units, support and explicit availability reasons. True class mix precedes those
-tables. Missing current classes make class-set-sensitive comparisons unavailable;
-valid probability metrics retain the class-composition caution. Small differences
-may reflect sampling variation; V1 does not estimate performance uncertainty.
-
-Calibration compares persisted M2 baseline bins with current quantile bins,
-support and probability-quality metrics. Multiclass selection follows frozen
-class order. Error examples contain at most 50 canonical row references per view;
-the API reads only included feature columns from hash-verified canonical Parquet.
-No full example rows are copied into PostgreSQL.
-
-
-## Diagnostics, history and reports (M5)
-
-From an analyzed run, open Data → a feature for complete saved evidence or
-Reliance × change for drift/missingness/reliance together. No composite score or
-causal explanation is calculated. Mode B → Slices → select an included categorical
-feature → Analyze Slices. A saved feature is revisited without a new job. Small
-slices remain in the table with reasons and are omitted from the selected metric
-plot. Missing cells and raw categorical spellings remain separate.
-
-Project → Trends selects one stored signal, with feature/class selection as
-appropriate. Mode A performance and probability-quality observations remain gaps.
-Run → Reliability Report opens the immutable 12-section report, with separately
-versioned completed slices. Use Print / Save as PDF in a browser. Methodology
-contains the static reviewed reference and searchable glossary. Scientific
-limitations remain visible on mobile and in print.
-
-See [M5 verification](docs/m5-verification.md) for the complete acceptance record.
-For optional browser checking, after the gate create a fresh synthetic fixture:
-
-```powershell
-# Same isolated stack / test override and environment as m5-gate.ps1.
-docker compose -p modelmedic-m5-verified -f compose.yaml -f scripts/compose.test.yaml run --rm --no-deps -T api python -m scripts.smoke_m5 prepare
-# Visit http://localhost:15182; inspect only the M5 synthetic acceptance project.
-docker compose -p modelmedic-m5-verified -f compose.yaml -f scripts/compose.test.yaml run --rm --no-deps -T api python -m scripts.smoke_m5 verify
-docker compose -p modelmedic-m5-verified -f compose.yaml -f scripts/compose.test.yaml run --rm --no-deps -T api python -m scripts.smoke_m5 cleanup
-```
-
-The preparation command refuses to overwrite an existing verification state.
-Cleanup checks the stored exact project ID and synthetic name, and removes only
-that fixture’s runs, derived records and private project prefix. No real data is
-used. M6 Demo Mode/public deployment work is not included.
-
-## M6 · UI integration and read-only demo
-
-The Clinical Reliability Lab UI now uses shared scientific statuses, evidence
-frames, table behavior, responsive run navigation and server-derived Demo Mode.
-See [Demo Mode and real-pipeline seeding](docs/demo-mode.md) for the reproducible
-seed, explicitly scoped read-only topology, verification and regeneration commands.
-M7 CI/hosting/deployment hardening is outside this milestone.
+Built by **[Manthan](https://github.com/manthan3502)**.
