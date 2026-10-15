@@ -1,15 +1,63 @@
 """Review commit candidates without printing secret values. Not a general secret scanner."""
 
 import argparse
+import hashlib
+import json
 import re
 import subprocess
 from pathlib import Path
+
+
+def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate manifest key")
+        result[key] = value
+    return result
+
+
+def load_reviewed_binaries(path: Path) -> dict[str, str]:
+    """Load exact, immutable documentation asset approvals; never accept patterns."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+        if (
+            not isinstance(data, dict)
+            or set(data) != {"version", "assets"}
+            or type(data["version"]) is not int
+            or data["version"] != 1
+            or not isinstance(data["assets"], list)
+        ):
+            raise ValueError("Invalid manifest schema")
+        approved: dict[str, str] = {}
+        names = set()
+        for asset in data["assets"]:
+            if not isinstance(asset, dict) or set(asset) != {"path", "sha256"}:
+                raise ValueError("Invalid asset schema")
+            name, digest = asset["path"], asset["sha256"]
+            if (
+                not isinstance(name, str)
+                or not re.fullmatch(
+                    r"docs/assets/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9][A-Za-z0-9_.-]*", name
+                )
+                or name.casefold() in names
+                or not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            ):
+                raise ValueError("Invalid or duplicate asset approval")
+            names.add(name.casefold())
+            approved[name] = digest
+        return approved
+    except (OSError, UnicodeError, ValueError) as exc:
+        # Never echo untrusted manifest contents, which could themselves contain secrets.
+        raise SystemExit("Reviewed binary manifest is missing or invalid") from exc
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--history", action="store_true")
     args = parser.parse_args()
+    approved = load_reviewed_binaries(Path("scripts/reviewed_binaries.json"))
     files = (
         subprocess.check_output(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"]
@@ -61,6 +109,17 @@ def main() -> None:
             if matches:
                 failures.append(f"{filename}: {label}")
 
+    def scan_content(filename: str, content: bytes, label: str, binary_reason: str) -> None:
+        digest = approved.get(filename)
+        if digest is not None and hashlib.sha256(content).hexdigest() != digest:
+            failures.append(f"{label}: reviewed binary SHA-256 mismatch")
+        try:
+            # A manifest entry never exempts decodable text from ordinary privacy checks.
+            scan(label, content.decode("utf-8"))
+        except UnicodeDecodeError:
+            if digest is None:
+                failures.append(f"{label}: {binary_reason}")
+
     for filename in sorted(set(files) - {""}):
         path = Path(filename)
         if (
@@ -71,10 +130,12 @@ def main() -> None:
             or any(part in {"node_modules", ".venv", "artifacts", "data"} for part in path.parts)
         ):
             failures.append(f"{filename}: prohibited commit candidate")
-        try:
-            scan(filename, path.read_text(encoding="utf-8"))
-        except UnicodeDecodeError:
-            failures.append(f"{filename}: binary candidate requires explicit privacy review")
+        scan_content(
+            filename,
+            path.read_bytes(),
+            filename,
+            "binary candidate requires explicit privacy review",
+        )
     revisions = []
     if args.history:
         revisions = subprocess.check_output(["git", "rev-list", "HEAD"]).decode().splitlines()
@@ -92,9 +153,9 @@ def main() -> None:
             ):
                 meta, filename = item.split("\t", 1)
                 blob = meta.split()[-1]
-                if blob in seen:
+                if (filename, blob) in seen:
                     continue
-                seen.add(blob)
+                seen.add((filename, blob))
                 content = subprocess.check_output(["git", "cat-file", "blob", blob])
                 path = Path(filename)
                 if path.name == ".env" or path.suffix in {
@@ -105,12 +166,12 @@ def main() -> None:
                     ".db",
                 }:
                     failures.append(f"{revision}:{filename}: prohibited historical artifact")
-                try:
-                    scan(f"{revision}:{filename}", content.decode("utf-8"))
-                except UnicodeDecodeError:
-                    failures.append(
-                        f"{revision}:{filename}: binary historical artifact requires review"
-                    )
+                scan_content(
+                    filename,
+                    content,
+                    f"{revision}:{filename}",
+                    "binary historical artifact requires review",
+                )
     if failures:
         raise SystemExit("Privacy review requires attention:\n" + "\n".join(failures))
     subprocess.run(["git", "diff", "--exit-code", "8e2029a", "--", "docs/specs"], check=True)
